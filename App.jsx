@@ -188,7 +188,7 @@ const AffordabilityBar = ({ ratio, label }) => {
 };
 
 const AIInsight = ({ text, loading }) => (
-  <div style={{ background: "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: `1px solid rgba(37,99,235,0.15)`, borderRadius: 14, padding: 14, marginTop: 14 }}>
+  <div style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: `1px solid ${C.primary}26`, borderRadius: 14, padding: 14, marginTop: 14 }}>
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
       <div style={{ width: 26, height: 26, borderRadius: 8, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0, color: "#fff", fontWeight: 700 }}>✦</div>
       <div style={{ fontSize: 13, color: "#1e3a5f", lineHeight: 1.65 }}>
@@ -1205,6 +1205,7 @@ function CDTracker({ cd, onUpdate, onDelete }) {
 function Dashboard({ user, onLogout, onShowAuth }) {
   const [scenarios, setScenarios] = useState(DB.getScenarios());
   const [activeTab, setActiveTab] = useState("overview");
+  const [showEmail, setShowEmail] = useState(true);
 
   // Income tracker
   const [monthlyIncome, setMonthlyIncome] = useState(() => DB_DASH.get("income") || 4000);
@@ -1265,6 +1266,7 @@ function Dashboard({ user, onLogout, onShowAuth }) {
     { id: "savings", label: "Savings" },
     { id: "cds", label: "CDs" },
     { id: "scenarios", label: "Scenarios" },
+    { id: "settings", label: "⚙️ Settings" },
   ];
 
   if (!user) return (
@@ -1282,20 +1284,27 @@ function Dashboard({ user, onLogout, onShowAuth }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
       {/* Profile header */}
-      <Card style={{ background: "linear-gradient(135deg, #eff6ff, #f0fdf4)", padding: "16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 46, height: 46, borderRadius: 14, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 20, fontWeight: 900, flexShrink: 0 }}>
+      <Card style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff, #f0fdf4)", padding: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+          <div style={{ width: 54, height: 54, borderRadius: 16, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 24, fontWeight: 900, flexShrink: 0 }}>
             {(user.name?.[0] || user.email?.[0] || "U").toUpperCase()}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: C.text }}>{user.name || user.email}</div>
-            <div style={{ fontSize: 11, color: C.muted }}>{user.email}{user.zip ? ` · 📍 ${user.zip}` : ""}</div>
+            <div style={{ fontWeight: 900, fontSize: 22, color: C.text, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{user.name || "User"}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+              {showEmail ? (user.email || "") : "••••••••••@•••••.•••"}
+              {user.zip ? ` · 📍 ${user.zip}` : ""}
+              <button onClick={() => setShowEmail(v => !v)} title={showEmail ? "Hide email" : "Show email"}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, padding: "0 2px", color: C.muted, lineHeight: 1 }}>
+                {showEmail ? "🙈" : "👁️"}
+              </button>
+            </div>
           </div>
           <Btn onClick={onLogout} variant="ghost" style={{ fontSize: 12 }}>Log out</Btn>
         </div>
 
         {/* Quick stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           <div style={{ background: "rgba(37,99,235,0.08)", borderRadius: 10, padding: "10px 12px", textAlign: "center" }}>
             <div style={{ fontSize: 10, color: C.primary, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>Monthly Income</div>
             <div style={{ fontSize: 16, fontWeight: 900, color: C.primary }}>{fmt(totalMonthlyIncome)}</div>
@@ -1521,11 +1530,129 @@ function Dashboard({ user, onLogout, onShowAuth }) {
         </div>
       )}
 
+      {activeTab === "settings" && (
+        <SettingsPanel user={user} onUpdate={(updatedUser) => {
+          DB.setUser(updatedUser);
+          // Update accounts store too
+          try {
+            const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
+            if (accounts[updatedUser.email]) {
+              accounts[updatedUser.email] = { ...accounts[updatedUser.email], ...updatedUser };
+              localStorage.setItem("re_accounts", JSON.stringify(accounts));
+            }
+          } catch {}
+          window.location.reload();
+        }} onLogout={onLogout} showEmail={showEmail} onToggleEmail={() => setShowEmail(v => !v)} />
+      )}
+
     </div>
   );
 }
 
-// ─── HOME ─────────────────────────────────────────────────────────────────────
+// ─── SETTINGS PANEL ───────────────────────────────────────────────────────────
+function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
+  const [displayName, setDisplayName] = useState(user.name || "");
+  const [email, setEmail] = useState(user.email || "");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [zip, setZip] = useState(user.zip || "");
+  const [msg, setMsg] = useState({ text: "", type: "" });
+
+  const show = (text, type = "ok") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "" }), 3500); };
+
+  const saveProfile = () => {
+    if (!displayName.trim()) { show("Display name can't be empty.", "err"); return; }
+    onUpdate({ ...user, name: displayName.trim(), zip });
+  };
+
+  const saveEmail = () => {
+    if (!email.includes("@")) { show("Enter a valid email address.", "err"); return; }
+    try {
+      const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
+      if (accounts[email.toLowerCase()] && email.toLowerCase() !== user.email.toLowerCase()) {
+        show("That email is already in use.", "err"); return;
+      }
+      const oldEntry = accounts[user.email.toLowerCase()];
+      if (oldEntry) {
+        delete accounts[user.email.toLowerCase()];
+        accounts[email.toLowerCase()] = { ...oldEntry, email: email.toLowerCase() };
+        localStorage.setItem("re_accounts", JSON.stringify(accounts));
+      }
+    } catch {}
+    onUpdate({ ...user, email: email.toLowerCase() });
+  };
+
+  const savePassword = () => {
+    if (newPassword.length < 6) { show("Password must be at least 6 characters.", "err"); return; }
+    if (newPassword !== confirmPassword) { show("Passwords don't match. Please try again.", "err"); return; }
+    try {
+      const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
+      if (accounts[user.email.toLowerCase()]) {
+        accounts[user.email.toLowerCase()].passwordHash = btoa(newPassword);
+        localStorage.setItem("re_accounts", JSON.stringify(accounts));
+      }
+    } catch {}
+    setNewPassword(""); setConfirmPassword("");
+    show("Password updated successfully! ✓");
+  };
+
+  const Section = ({ title, children }) => (
+    <Card style={{ marginBottom: 0 }}>
+      <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>{title}</div>
+      {children}
+    </Card>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+      {msg.text && (
+        <div style={{ padding: "10px 16px", borderRadius: 10, fontWeight: 600, fontSize: 13,
+          background: msg.type === "err" ? C.redBg : C.greenBg,
+          border: `1px solid ${msg.type === "err" ? C.redBorder : C.greenBorder}`,
+          color: msg.type === "err" ? C.red : C.green }}>
+          {msg.text}
+        </div>
+      )}
+
+      <Section title="👤 Display Name">
+        <Input label="Name shown across the app" value={displayName} onChange={setDisplayName} placeholder="Your name" />
+        <Input label="ZIP Code" value={zip} onChange={setZip} placeholder="Optional — used for local cost defaults" />
+        <Btn onClick={saveProfile} style={{ width: "100%" }}>Save Profile</Btn>
+      </Section>
+
+      <Section title="📧 Email Address">
+        <Input label="Email" value={email} onChange={setEmail} placeholder="you@email.com" type="email" />
+        <Btn onClick={saveEmail} style={{ width: "100%" }}>Update Email</Btn>
+      </Section>
+
+      <Section title="🔒 Change Password">
+        <Input label="New Password" value={newPassword} onChange={setNewPassword} placeholder="Min 6 characters" type="password" />
+        <Input label="Re-enter New Password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Must match above" type="password" />
+        <Btn onClick={savePassword} style={{ width: "100%" }}>Update Password</Btn>
+      </Section>
+
+      <Section title="🔍 Privacy">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Show email on dashboard</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Hides your email from the profile card and sidebar</div>
+          </div>
+          <button onClick={onToggleEmail}
+            style={{ width: 48, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: showEmail ? C.primary : C.border, transition: "background 0.2s", position: "relative", flexShrink: 0 }}>
+            <div style={{ width: 20, height: 20, borderRadius: 999, background: "#fff", position: "absolute", top: 3, transition: "left 0.2s", left: showEmail ? 24 : 4 }} />
+          </button>
+        </div>
+      </Section>
+
+      <Section title="⚠️ Account">
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Logging out will clear your session. Your saved data stays on this device.</div>
+        <Btn onClick={onLogout} variant="danger" style={{ width: "100%" }}>Log Out</Btn>
+      </Section>
+
+    </div>
+  );
+}
 function Home({ onNavigate }) {
   const sims = [
     { id: "moving", icon: "🏠", title: "Moving Out Reality", desc: "Rent + utilities + groceries + hidden costs", badge: "Monthly" },
@@ -1543,7 +1670,7 @@ function Home({ onNavigate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Card style={{ background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)", border: "none" }}>
+      <Card style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)", border: "none" }}>
         <Badge variant="ok">✅ Decision confidence</Badge>
         <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.03em", margin: "10px 0 10px", color: C.text, lineHeight: 1.2 }}>
           Know the real monthly cost<br/>before you commit.
@@ -1558,7 +1685,7 @@ function Home({ onNavigate }) {
       </Card>
 
       <div>
-        <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 12 }}>Pick a simulator</div>
+        <div className="re-section-title" style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 12 }}>Pick a simulator</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {sims.map(s => (
             <Card key={s.id} onClick={() => onNavigate("simulate", s.id)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px" }}>
@@ -1575,7 +1702,7 @@ function Home({ onNavigate }) {
         </div>
       </div>
 
-      <Card onClick={() => onNavigate("spending")} style={{ cursor: "pointer", background: "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: "1.5px solid rgba(37,99,235,0.2)" }}>
+      <Card onClick={() => onNavigate("spending")} style={{ cursor: "pointer", background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1a2a3a)` : "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: `1.5px solid ${C.primary}33` }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <span style={{ fontSize: 26 }}>🧾</span>
@@ -1790,6 +1917,12 @@ function SpendingTracker() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
+      {/* Page Header */}
+      <div style={{ marginBottom: 4 }}>
+        <div style={{ fontSize: 26, fontWeight: 900, color: C.text, letterSpacing: "-0.02em" }}>🧾 Spending Tracker</div>
+        <div style={{ fontSize: 14, color: C.muted, marginTop: 4 }}>Log transactions · catch wasteful habits · AI analysis</div>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
         {byNecessity.map(n => (
           <div key={n.id} style={{ background: n.bg, border: `1px solid ${n.border}`, borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
@@ -1817,7 +1950,7 @@ function SpendingTracker() {
       </Card>
 
       {(aiAnalysis || aiLoading) && (
-        <div style={{ background: "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: "1px solid rgba(37,99,235,0.15)", borderRadius: 14, padding: 16 }}>
+        <div style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: `1px solid ${C.primary}26`, borderRadius: 14, padding: 16 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0, color: "#fff", fontWeight: 700 }}>✦</div>
             <div style={{ fontSize: 13, color: "#1e3a5f", lineHeight: 1.7 }}>
@@ -2758,7 +2891,7 @@ Generate 6-8 articles covering the selected topics. Make them realistic, current
 
       {/* Personal briefing */}
       {!loading && summary && (
-        <div style={{ background: "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: "1px solid rgba(37,99,235,0.15)", borderRadius: 16, padding: 16 }}>
+        <div style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff, #f0fdf4)", border: `1px solid ${C.primary}26`, borderRadius: 16, padding: 16 }}>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
             <div style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0, color: "#fff", fontWeight: 700 }}>✦</div>
             <div>
@@ -2853,6 +2986,15 @@ export default function RealityEstimator() {
     if (saved !== null) return saved === "true";
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches || false;
   });
+  const [sidebarShowEmail, setSidebarShowEmail] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = "ok") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 30000);
+  };
 
   // Update global C before this render so all child components get correct colors
   C = dark ? DARK : LIGHT;
@@ -2867,11 +3009,7 @@ export default function RealityEstimator() {
 
   const handleSave = (scenario) => {
     DB.saveScenario(scenario);
-    const saved = document.createElement("div");
-    saved.textContent = "✓ Scenario saved!";
-    Object.assign(saved.style, { position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", background: C.green, color: "#fff", padding: "10px 20px", borderRadius: 999, fontWeight: 700, fontSize: 13, zIndex: 200 });
-    document.body.appendChild(saved);
-    setTimeout(() => saved.remove(), 2000);
+    showToast("✓ Scenario saved! Find it in Dashboard → Scenarios.");
   };
 
   const handleLogout = () => { DB.setUser(null); setUser(null); };
@@ -2889,13 +3027,18 @@ export default function RealityEstimator() {
       <style>{`
         * { box-sizing: border-box; }
         select { appearance: none; }
-        body { background: ${C.bg}; margin: 0; }
+        body { background: ${C.bg}; margin: 0; color: ${C.text}; }
+        input, textarea, select { color: ${C.text} !important; background: ${C.cardAlt} !important; }
+        input::placeholder { color: ${C.muted} !important; }
         @media (min-width: 768px) {
-          .re-layout { display: grid !important; grid-template-columns: 220px 1fr; max-width: 1100px !important; margin: 0 auto !important; gap: 0; min-height: 100vh; }
-          .re-sidebar { display: flex !important; flex-direction: column; padding: 24px 16px; border-right: 1px solid ${C.border}; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-          .re-content { max-width: 680px !important; padding: 24px 28px !important; }
+          .re-layout { display: flex !important; width: 100%; min-height: 100vh; }
+          .re-sidebar { display: flex !important; flex-direction: column; padding: 20px 12px; border-right: 1px solid ${C.border}; position: sticky; top: 56px; height: fit-content; min-width: 200px; max-width: 200px; align-self: flex-start; }
+          .re-content { flex: 1 !important; max-width: 100% !important; padding: 28px 40px !important; }
           .re-bottom-nav { display: none !important; }
-          .re-header-inner { max-width: 1100px !important; }
+          .re-header-inner { max-width: 100% !important; padding: 12px 32px !important; }
+          h1 { font-size: 36px !important; }
+          .re-section-title { font-size: 20px !important; }
+          .re-card-title { font-size: 16px !important; }
         }
         @media (max-width: 767px) {
           .re-sidebar { display: none !important; }
@@ -2920,8 +3063,34 @@ export default function RealityEstimator() {
           </button>
 
           {user ? (
-            <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "grid", placeItems: "center", color: "#fff", fontWeight: 900, cursor: "pointer" }} onClick={() => navigate("dashboard")}>
-              {user.name?.[0]?.toUpperCase() || "U"}
+            <div style={{ position: "relative" }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "grid", placeItems: "center", color: "#fff", fontWeight: 900, cursor: "pointer" }}
+                onClick={() => setShowUserMenu(v => !v)}>
+                {user.name?.[0]?.toUpperCase() || "U"}
+              </div>
+              {showUserMenu && (
+                <div onClick={() => setShowUserMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 98 }} />
+              )}
+              {showUserMenu && (
+                <div style={{ position: "absolute", right: 0, top: 42, background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, boxShadow: C.shadow, minWidth: 180, zIndex: 99, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{user.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{user.email}</div>
+                  </div>
+                  <button onClick={() => { setShowUserMenu(false); navigate("dashboard"); }}
+                    style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                    ◎ Dashboard
+                  </button>
+                  <button onClick={() => { setShowUserMenu(false); setShowSettings(true); }}
+                    style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+                    ⚙️ Settings
+                  </button>
+                  <button onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                    style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 8, borderTop: `1px solid ${C.border}` }}>
+                    🚪 Log out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <>
@@ -2937,15 +3106,26 @@ export default function RealityEstimator() {
 
         {/* Desktop Sidebar Nav */}
         <div className="re-sidebar" style={{ display: "none", background: C.card, borderRight: `1px solid ${C.border}` }}>
-          <div style={{ marginBottom: 32 }}>
+          <div style={{ marginBottom: 24 }}>
             {user ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 10px", background: C.primaryLight, borderRadius: 12, marginBottom: 8 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "grid", placeItems: "center", color: "#fff", fontWeight: 900, fontSize: 15 }}>
-                  {user.name?.[0]?.toUpperCase() || "U"}
+              <div style={{ padding: "12px 10px", background: C.primaryLight, borderRadius: 12, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `linear-gradient(135deg, ${C.primary}, #1d4ed8)`, display: "grid", placeItems: "center", color: "#fff", fontWeight: 900, fontSize: 15, flexShrink: 0 }}>
+                    {user.name?.[0]?.toUpperCase() || "U"}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, color: C.primary, fontWeight: 800, letterSpacing: "-0.01em" }}>👋 Hello,</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name || "User"}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: C.text }}>{user.name}</div>
-                  <div style={{ fontSize: 10, color: C.muted }}>{user.email}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: C.muted }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                    {sidebarShowEmail ? user.email : "••••••••@•••.•••"}
+                  </span>
+                  <button onClick={() => setSidebarShowEmail(v => !v)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, padding: "0 2px", color: C.muted, flexShrink: 0 }}>
+                    {sidebarShowEmail ? "🙈" : "👁️"}
+                  </button>
                 </div>
               </div>
             ) : (
@@ -2964,11 +3144,9 @@ export default function RealityEstimator() {
             </button>
           ))}
 
-          <div style={{ flex: 1 }} />
-
           {user && (
             <button onClick={handleLogout}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.muted, fontWeight: 500, fontSize: 14, marginTop: 16 }}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.muted, fontWeight: 500, fontSize: 14, marginTop: 12 }}>
               <span style={{ fontSize: 18, width: 24 }}>🚪</span> Log out
             </button>
           )}
@@ -2996,6 +3174,52 @@ export default function RealityEstimator() {
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={setUser} />}
+
+      {/* Toast notification bar */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 300,
+          background: toast.type === "err" ? C.red : "#0f766e",
+          color: "#fff", padding: "14px 20px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+          animation: "slideDown 0.3s ease",
+        }}>
+          <style>{`@keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }`}</style>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 700, fontSize: 14 }}>
+            <span style={{ fontSize: 18 }}>{toast.type === "err" ? "⚠️" : "✅"}</span>
+            {toast.msg}
+          </div>
+          <button onClick={() => setToast(null)}
+            style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", cursor: "pointer", borderRadius: 6, padding: "4px 10px", fontWeight: 700, fontSize: 13 }}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {showSettings && user && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setShowSettings(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 20, padding: 24, width: "100%", maxWidth: 500, maxHeight: "85vh", overflowY: "auto", boxShadow: C.shadow }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 900, fontSize: 20, color: C.text }}>⚙️ Settings</div>
+              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: C.muted }}>✕</button>
+            </div>
+            <SettingsPanel user={user} onUpdate={(updatedUser) => {
+              DB.setUser(updatedUser);
+              try {
+                const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
+                if (accounts[updatedUser.email]) {
+                  accounts[updatedUser.email] = { ...accounts[updatedUser.email], ...updatedUser };
+                  localStorage.setItem("re_accounts", JSON.stringify(accounts));
+                }
+              } catch {}
+              setUser(updatedUser);
+              setShowSettings(false);
+            }} onLogout={() => { setShowSettings(false); handleLogout(); }}
+            showEmail={sidebarShowEmail} onToggleEmail={() => setSidebarShowEmail(v => !v)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
