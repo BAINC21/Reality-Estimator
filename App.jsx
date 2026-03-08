@@ -1543,7 +1543,7 @@ function Home({ onNavigate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <Card style={{ background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)", border: "none" }}>
+      <Card style={{ background: C.bg === "#0a0f1e" ? `linear-gradient(135deg, ${C.card}, #1e3a5f)` : "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)", border: "none" }}>
         <Badge variant="ok">✅ Decision confidence</Badge>
         <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.03em", margin: "10px 0 10px", color: C.text, lineHeight: 1.2 }}>
           Know the real monthly cost<br/>before you commit.
@@ -1558,7 +1558,7 @@ function Home({ onNavigate }) {
       </Card>
 
       <div>
-        <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 12 }}>Pick a simulator</div>
+        <div className="re-section-title" style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 12 }}>Pick a simulator</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {sims.map(s => (
             <Card key={s.id} onClick={() => onNavigate("simulate", s.id)} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px" }}>
@@ -2889,13 +2889,18 @@ export default function RealityEstimator() {
       <style>{`
         * { box-sizing: border-box; }
         select { appearance: none; }
-        body { background: ${C.bg}; margin: 0; }
+        body { background: ${C.bg}; margin: 0; color: ${C.text}; }
+        input, textarea, select { color: ${C.text} !important; background: ${C.cardAlt} !important; }
+        input::placeholder { color: ${C.muted} !important; }
         @media (min-width: 768px) {
-          .re-layout { display: grid !important; grid-template-columns: 220px 1fr; max-width: 1100px !important; margin: 0 auto !important; gap: 0; min-height: 100vh; }
-          .re-sidebar { display: flex !important; flex-direction: column; padding: 24px 16px; border-right: 1px solid ${C.border}; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-          .re-content { max-width: 680px !important; padding: 24px 28px !important; }
+          .re-layout { display: flex !important; width: 100%; min-height: 100vh; }
+          .re-sidebar { display: flex !important; flex-direction: column; padding: 20px 12px; border-right: 1px solid ${C.border}; position: sticky; top: 56px; height: fit-content; min-width: 200px; max-width: 200px; align-self: flex-start; }
+          .re-content { flex: 1 !important; max-width: 100% !important; padding: 28px 40px !important; }
           .re-bottom-nav { display: none !important; }
-          .re-header-inner { max-width: 1100px !important; }
+          .re-header-inner { max-width: 100% !important; padding: 12px 32px !important; }
+          h1 { font-size: 36px !important; }
+          .re-section-title { font-size: 20px !important; }
+          .re-card-title { font-size: 16px !important; }
         }
         @media (max-width: 767px) {
           .re-sidebar { display: none !important; }
@@ -2964,11 +2969,9 @@ export default function RealityEstimator() {
             </button>
           ))}
 
-          <div style={{ flex: 1 }} />
-
           {user && (
             <button onClick={handleLogout}
-              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.muted, fontWeight: 500, fontSize: 14, marginTop: 16 }}>
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer", fontFamily: "inherit", background: "transparent", color: C.muted, fontWeight: 500, fontSize: 14, marginTop: 12 }}>
               <span style={{ fontSize: 18, width: 24 }}>🚪</span> Log out
             </button>
           )}
