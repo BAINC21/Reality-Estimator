@@ -1,26 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { createClient } from "@supabase/supabase-js";
 
-// ─── SUPABASE CLIENT (loaded via CDN in index.html) ───────────────────────────
+// ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://obsgsmaxydccohmyjxhh.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ic2dzbWF4eWRjY29obXlqeGhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MjIwMzcsImV4cCI6MjA4Nzk5ODAzN30.S4seJqj703w_IgIkzv40Qi1230PTl_0RI4h5Lsrqh1s";
-const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON) || {
-  auth: {
-    signUp: async () => ({ data: null, error: new Error("Supabase not loaded") }),
-    signInWithPassword: async () => ({ data: null, error: new Error("Supabase not loaded") }),
-    signOut: async () => {},
-    getSession: async () => ({ data: { session: null } }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    updateUser: async () => ({ error: new Error("Supabase not loaded") }),
-  },
-  from: () => ({
-    select: () => ({ eq: () => ({ single: async () => ({ data: null }), order: async () => ({ data: [] }) }), order: () => ({ data: [] }) }),
-    insert: async () => ({ error: null }),
-    upsert: async () => ({ error: null }),
-    update: () => ({ eq: async () => ({}) }),
-    delete: () => ({ eq: async () => ({}) }),
-  }),
-};
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
@@ -1130,37 +1115,15 @@ function AuthModal({ onClose, onAuth }) {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { data, error } = await sb.auth.signUp({
-          email: email.trim().toLowerCase(),
-          password,
-          options: { data: { name: name || email.split("@")[0], zip } }
-        });
-        if (error) throw error;
-        // Supabase may require email confirmation — handle both cases
-        const sbUser = data?.user;
-        if (!sbUser) throw new Error("Signup failed. Please try again.");
-        const user = { id: sbUser.id, name: name || email.split("@")[0], email: sbUser.email, zip, is_admin: false, joined: new Date().toLocaleDateString() };
+        const sbUser = await SB.signUp(email, password, name || email.split("@")[0], zip);
+        const user = { id: sbUser.id, name: name || email.split("@")[0], email: sbUser.email, zip, joined: new Date().toLocaleDateString() };
         DB.setUser(user);
         onAuth(user);
         onClose();
       } else {
-        const { data, error } = await sb.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
-          password
-        });
-        if (error) throw error;
-        const sbUser = data?.user;
-        if (!sbUser) throw new Error("Login failed. Please try again.");
-        // Load profile for admin flag and display name
-        const { data: profile } = await sb.from("profiles").select("*").eq("id", sbUser.id).single();
-        const user = {
-          id: sbUser.id,
-          name: profile?.name || sbUser.email.split("@")[0],
-          email: sbUser.email,
-          zip: profile?.zip || "",
-          is_admin: profile?.is_admin || false,
-          joined: new Date(sbUser.created_at).toLocaleDateString()
-        };
+        const sbUser = await SB.signIn(email, password);
+        const profile = await SB.getProfile(sbUser.id);
+        const user = { id: sbUser.id, name: profile?.name || sbUser.email.split("@")[0], email: sbUser.email, zip: profile?.zip || "", is_admin: profile?.is_admin || false, joined: new Date(sbUser.created_at).toLocaleDateString() };
         DB.setUser(user);
         onAuth(user);
         onClose();
@@ -3129,348 +3092,6 @@ Generate 6-8 articles covering the selected topics. Make them realistic, current
   );
 }
 
-// ─── ADMIN PANEL ─────────────────────────────────────────────────────────────
-function AdminPanel({ onClose, user, showToast }) {
-  const [tab, setTab] = useState("news");
-  const [articles, setArticles] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [rawInput, setRawInput] = useState("");
-  const [processing, setProcessing] = useState(false);
-  const [processLog, setProcessLog] = useState("");
-
-  const ADMIN_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
-
-  // Load data on tab change
-  useEffect(() => {
-    if (tab === "news") loadArticles();
-    if (tab === "reviews") loadReviews();
-    if (tab === "users") loadUsers();
-  }, [tab]);
-
-  const loadArticles = async () => {
-    setLoading(true);
-    try {
-      const { data } = await sb.from("news_articles").select("*").order("published_at", { ascending: false });
-      setArticles(data || []);
-    } catch {}
-    setLoading(false);
-  };
-
-  const loadReviews = async () => {
-    setLoading(true);
-    try {
-      const { data } = await sb.from("reviews").select("*").order("created_at", { ascending: false });
-      setReviews(data || []);
-    } catch {}
-    setLoading(false);
-  };
-
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      const { data } = await sb.from("profiles").select("id, name, zip, is_admin, created_at").order("created_at", { ascending: false });
-      setUsers(data || []);
-    } catch {}
-    setLoading(false);
-  };
-
-  const daysOld = (dateStr) => Math.floor((Date.now() - new Date(dateStr)) / 86400000);
-  const daysLeft = (dateStr) => Math.max(0, 50 - daysOld(dateStr));
-
-  const urgencyColor = (d) => d <= 5 ? C.red : d <= 14 ? C.amber : C.green;
-
-  const processArticles = async () => {
-    const trimmed = rawInput.trim();
-    if (!trimmed) return;
-    const chunks = trimmed.split(/\n{2,}/).map(s => s.trim()).filter(Boolean).slice(0, 50);
-    if (chunks.length === 0) { showToast("Paste at least one article.", "err"); return; }
-    setProcessing(true);
-    setProcessLog(`Processing ${chunks.length} article(s) with AI…`);
-
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": ADMIN_KEY, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4000,
-          system: `You process financial news articles for a personal finance app called Reality Estimator. 
-For each article, extract and return a JSON array. Each object must have:
-- title: string (clear headline, max 80 chars)
-- summary: string (2-3 sentence summary of key facts, plain language)
-- impact: string (1 sentence: "How this affects you:" — practical impact for young adults managing money)
-- topics: array of strings from: ["housing","interest","jobs","inflation","debt","recession"]
-- life_stages: array from: ["student","young_adult","starting_family","established","pre_retirement"]
-- urgency: "high" | "medium" | "low"
-- sentiment: "positive" | "negative" | "neutral"
-- source_url: string (extract URL if present, else "")
-Return ONLY a valid JSON array, no markdown, no explanation.`,
-          messages: [{ role: "user", content: `Process these ${chunks.length} articles:\n\n${chunks.map((c, i) => `--- ARTICLE ${i+1} ---\n${c}`).join("\n\n")}` }]
-        })
-      });
-      const d = await res.json();
-      const text = d.content?.[0]?.text || "[]";
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(cleaned);
-
-      setProcessLog(`✓ Processed ${parsed.length} articles. Saving to database…`);
-
-      const rows = parsed.map(a => ({
-        title: a.title,
-        summary: a.summary,
-        impact: a.impact,
-        topics: a.topics || [],
-        life_stages: a.life_stages || [],
-        urgency: a.urgency || "medium",
-        sentiment: a.sentiment || "neutral",
-        source_url: a.source_url || "",
-        raw_content: "",
-        is_active: true,
-        published_at: new Date().toISOString(),
-      }));
-
-      const { error } = await sb.from("news_articles").insert(rows);
-      if (error) throw error;
-
-      setProcessLog(`✅ ${parsed.length} articles published successfully!`);
-      setRawInput("");
-      setTimeout(() => { setProcessLog(""); loadArticles(); }, 2000);
-      showToast(`✓ ${parsed.length} articles published to all users!`);
-    } catch (e) {
-      setProcessLog(`❌ Error: ${e.message}`);
-      showToast("Failed to process articles. Check your input.", "err");
-    }
-    setProcessing(false);
-  };
-
-  const toggleArticle = async (id, current) => {
-    await sb.from("news_articles").update({ is_active: !current }).eq("id", id);
-    loadArticles();
-  };
-
-  const deleteArticle = async (id) => {
-    await sb.from("news_articles").delete().eq("id", id);
-    loadArticles();
-    showToast("Article deleted.");
-  };
-
-  const toggleReview = async (id, current) => {
-    await sb.from("reviews").update({ is_approved: !current }).eq("id", id);
-    loadReviews();
-  };
-
-  const deleteReview = async (id) => {
-    await sb.from("reviews").delete().eq("id", id);
-    loadReviews();
-  };
-
-  const tabs = [
-    { id: "news", label: "📰 News Manager" },
-    { id: "reviews", label: "⭐ Reviews" },
-    { id: "users", label: "👥 Users" },
-  ];
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 200, display: "flex", alignItems: "stretch", justifyContent: "flex-end" }}>
-      <div style={{ width: "100%", maxWidth: 780, background: C.bg, display: "flex", flexDirection: "column", boxShadow: "-20px 0 60px rgba(0,0,0,0.4)", overflowY: "auto" }}>
-
-        {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", background: C.card, position: "sticky", top: 0, zIndex: 10 }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: 20, color: C.text }}>🛡️ Admin Panel</div>
-            <div style={{ fontSize: 12, color: C.muted }}>Logged in as {user.email}</div>
-          </div>
-          <button onClick={onClose} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 10, width: 36, height: 36, cursor: "pointer", fontSize: 18, color: C.muted }}>✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{ display: "flex", gap: 6, padding: "14px 24px", borderBottom: `1px solid ${C.border}`, background: C.card }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              style={{ padding: "8px 16px", borderRadius: 999, border: `1.5px solid ${tab === t.id ? C.primary : C.border}`, background: tab === t.id ? C.primary : "transparent", color: tab === t.id ? "#fff" : C.muted, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ padding: 24, flex: 1 }}>
-
-          {/* ── NEWS MANAGER ── */}
-          {tab === "news" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-
-              {/* Upload area */}
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 20 }}>
-                <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 4 }}>📤 Upload Articles</div>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
-                  Paste up to 50 articles — separate each article with a blank line. Can be raw text, URLs with context, or copied article body. Claude will summarize, tag, and publish them automatically.
-                </div>
-                <textarea
-                  value={rawInput}
-                  onChange={e => setRawInput(e.target.value)}
-                  placeholder={"Paste article 1 here...\n\nPaste article 2 here (separated by blank line)...\n\nPaste article 3 here..."}
-                  style={{ width: "100%", minHeight: 180, padding: "12px 14px", border: `1.5px solid ${C.border}`, borderRadius: 12, fontSize: 13, fontFamily: "inherit", background: C.cardAlt, color: C.text, resize: "vertical", boxSizing: "border-box", lineHeight: 1.6 }}
-                />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-                  <div style={{ fontSize: 12, color: C.muted }}>
-                    {rawInput.trim() ? `~${rawInput.trim().split(/\n{2,}/).filter(Boolean).length} article(s) detected` : "No articles pasted yet"}
-                  </div>
-                  <Btn onClick={processArticles} style={{ opacity: processing ? 0.7 : 1 }}>
-                    {processing ? "⏳ Processing…" : "🚀 Process & Publish"}
-                  </Btn>
-                </div>
-                {processLog && (
-                  <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 10, background: processLog.startsWith("❌") ? C.redBg : C.greenBg, border: `1px solid ${processLog.startsWith("❌") ? C.redBorder : C.greenBorder}`, fontSize: 13, color: processLog.startsWith("❌") ? C.red : C.green, fontWeight: 600 }}>
-                    {processLog}
-                  </div>
-                )}
-              </div>
-
-              {/* Article list */}
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Published Articles ({articles.length})</div>
-                  <button onClick={loadArticles} style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>↺ Refresh</button>
-                </div>
-
-                {loading && <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 20 }}>Loading…</div>}
-
-                {!loading && articles.length === 0 && (
-                  <div style={{ textAlign: "center", padding: 32, color: C.muted, fontSize: 13 }}>No articles yet. Paste some above to get started.</div>
-                )}
-
-                {articles.map(a => {
-                  const old = daysOld(a.published_at);
-                  const left = daysLeft(a.published_at);
-                  const color = urgencyColor(left);
-                  return (
-                    <div key={a.id} style={{ background: C.card, border: `1px solid ${left <= 5 ? C.redBorder : C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 4 }}>{a.title}</div>
-                          <div style={{ fontSize: 12, color: C.muted, marginBottom: 6, lineHeight: 1.5 }}>{a.summary}</div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            {(a.topics || []).map(t => (
-                              <span key={t} style={{ fontSize: 10, background: C.primaryLight, color: C.primary, padding: "2px 8px", borderRadius: 999, fontWeight: 700 }}>{t}</span>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-                          {/* Age / days left */}
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color }}>
-                              {left === 0 ? "⚠️ Expired" : `${left}d left`}
-                            </div>
-                            <div style={{ fontSize: 10, color: C.muted }}>{old}d old</div>
-                          </div>
-                          {/* Age bar */}
-                          <div style={{ width: 80, height: 4, background: C.border, borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${Math.min(100, (old / 50) * 100)}%`, background: color, borderRadius: 4, transition: "width 0.3s" }} />
-                          </div>
-                          {/* Actions */}
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => toggleArticle(a.id, a.is_active)}
-                              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: a.is_active ? C.greenBg : C.cardAlt, color: a.is_active ? C.green : C.muted, cursor: "pointer", fontWeight: 700 }}>
-                              {a.is_active ? "Live" : "Hidden"}
-                            </button>
-                            <button onClick={() => deleteArticle(a.id)}
-                              style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.redBorder}`, background: C.redBg, color: C.red, cursor: "pointer", fontWeight: 700 }}>
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 8 }}>
-                        Published {new Date(a.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        {a.source_url && <> · <a href={a.source_url} target="_blank" rel="noreferrer" style={{ color: C.primary }}>Source ↗</a></>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ── REVIEWS ── */}
-          {tab === "reviews" && (
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 16 }}>
-                ⭐ Reviews ({reviews.length} total · {reviews.filter(r => r.is_approved).length} approved)
-              </div>
-              {loading && <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 20 }}>Loading…</div>}
-              {!loading && reviews.length === 0 && (
-                <div style={{ textAlign: "center", padding: 32, color: C.muted, fontSize: 13 }}>No reviews yet.</div>
-              )}
-              {reviews.map(r => (
-                <div key={r.id} style={{ background: C.card, border: `1px solid ${r.is_approved ? C.greenBorder : C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{r.name || "Anonymous"}</span>
-                        <span style={{ fontSize: 14 }}>{"⭐".repeat(r.rating || 0)}</span>
-                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700, background: r.is_approved ? C.greenBg : C.amberBg, color: r.is_approved ? C.green : C.amber }}>
-                          {r.is_approved ? "Approved" : "Pending"}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.5 }}>{r.body}</div>
-                      <div style={{ fontSize: 10, color: C.muted, marginTop: 6 }}>{new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 6, marginLeft: 12 }}>
-                      <button onClick={() => toggleReview(r.id, r.is_approved)}
-                        style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: r.is_approved ? C.amberBg : C.greenBg, color: r.is_approved ? C.amber : C.green, cursor: "pointer", fontWeight: 700 }}>
-                        {r.is_approved ? "Unpublish" : "Approve"}
-                      </button>
-                      <button onClick={() => deleteReview(r.id)}
-                        style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.redBorder}`, background: C.redBg, color: C.red, cursor: "pointer", fontWeight: 700 }}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ── USERS ── */}
-          {tab === "users" && (
-            <div>
-              <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-                {[
-                  { label: "Total Users", value: users.length, color: C.primary },
-                  { label: "Admins", value: users.filter(u => u.is_admin).length, color: C.amber },
-                  { label: "This Month", value: users.filter(u => new Date(u.created_at) > new Date(Date.now() - 30*86400000)).length, color: C.green },
-                ].map(s => (
-                  <div key={s.label} style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{s.value}</div>
-                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{s.label}</div>
-                  </div>
-                ))}
-              </div>
-              {loading && <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 20 }}>Loading…</div>}
-              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: 0, padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>
-                  <span>Name</span><span>ZIP</span><span>Joined</span><span>Role</span>
-                </div>
-                {users.map((u, i) => (
-                  <div key={u.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: 0, padding: "12px 16px", borderBottom: i < users.length - 1 ? `1px solid ${C.border}` : "none", alignItems: "center" }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{u.name || "—"}</span>
-                    <span style={{ fontSize: 12, color: C.muted }}>{u.zip || "—"}</span>
-                    <span style={{ fontSize: 11, color: C.muted }}>{new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700, background: u.is_admin ? C.amberBg : C.primaryLight, color: u.is_admin ? C.amber : C.primary }}>{u.is_admin ? "Admin" : "User"}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function RealityEstimator() {
   const [page, setPage] = useState("home");
@@ -3485,7 +3106,6 @@ export default function RealityEstimator() {
   const [sidebarShowEmail, setSidebarShowEmail] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg, type = "ok") => {
@@ -3495,19 +3115,12 @@ export default function RealityEstimator() {
 
   // Restore Supabase session on load
   useEffect(() => {
-    sb.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
+    SB.getSession().then(async (session) => {
+      if (session?.user && !DB.getUser()) {
         try {
-          const { data: profile } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
-          const u = {
-            id: session.user.id,
-            name: profile?.name || session.user.email.split("@")[0],
-            email: session.user.email,
-            zip: profile?.zip || "",
-            is_admin: profile?.is_admin || false
-          };
-          DB.setUser(u);
-          setUser(u);
+          const profile = await SB.getProfile(session.user.id);
+          const u = { id: session.user.id, name: profile?.name || session.user.email.split("@")[0], email: session.user.email, zip: profile?.zip || "", is_admin: profile?.is_admin || false };
+          DB.setUser(u); setUser(u);
         } catch {}
       }
     });
@@ -3603,12 +3216,6 @@ export default function RealityEstimator() {
                     style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
                     ◎ Dashboard
                   </button>
-                  {user?.is_admin && (
-                    <button onClick={() => { setShowUserMenu(false); setShowAdmin(true); }}
-                      style={{ width: "100%", padding: "10px 14px", background: "rgba(37,99,235,0.08)", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.primary, display: "flex", alignItems: "center", gap: 8, fontWeight: 700 }}>
-                      🛡️ Admin Panel
-                    </button>
-                  )}
                   <button onClick={() => { setShowUserMenu(false); setShowSettings(true); }}
                     style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", textAlign: "left", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
                     ⚙️ Settings
@@ -3701,9 +3308,7 @@ export default function RealityEstimator() {
         ))}
       </div>
 
-      {showAdmin && user?.is_admin && (
-        <AdminPanel onClose={() => setShowAdmin(false)} user={user} showToast={showToast} />
-      )}
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} onAuth={setUser} />}
 
       {/* Toast notification bar */}
       {toast && (
