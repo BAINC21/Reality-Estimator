@@ -397,7 +397,7 @@ function useAI(prompt, deps) {
         ? `You are a personal finance advisor. You have access to current financial news context below. Use it to make your advice timely and specific — reference relevant news when it directly affects the user's situation. Give ONE concise, direct, actionable insight. 2-3 sentences max. No bullet points. Plain conversational language.\n\nCURRENT FINANCIAL NEWS CONTEXT:\n${newsCtx}`
         : "You are a personal finance advisor. Give ONE concise, direct, actionable insight. 2 sentences max. No bullet points. Plain conversational language.";
       try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
+        const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -2015,7 +2015,7 @@ function SpendingTracker() {
     const wantTotal = byNecessity.find(n => n.id === "want")?.amount || 0;
     const impulseTotal = byNecessity.find(n => n.id === "impulse")?.amount || 0;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2839,7 +2839,7 @@ Return a JSON object with this exact structure (no markdown, pure JSON):
 
 Generate 6-8 articles covering the selected topics. Make them realistic, current, and specific. For ${p.state || "the US"}, include local data where relevant.`;
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3140,9 +3140,9 @@ function AdminPanel({ onClose, user, showToast }) {
     setProcessing(true);
     setProcessLog(`Processing ${chunks.length} article(s) with AI…`);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 4000,
           system: `You process financial news for a personal finance app. For each article return a JSON array. Each object: title (max 80 chars), summary (2-3 sentences), impact ("How this affects you:" 1 sentence for young adults), topics (array from: housing,interest,jobs,inflation,debt,recession), life_stages (array from: student,young_adult,starting_family,established,pre_retirement), urgency (high/medium/low), sentiment (positive/negative/neutral), source_url (extract if present else ""). Return ONLY valid JSON array, no markdown.`,
