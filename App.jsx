@@ -1,31 +1,153 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { createClient } from "@supabase/supabase-js";
+
+// ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://obsgsmaxydccohmyjxhh.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ic2dzbWF4eWRjY29obXlqeGhoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MjIwMzcsImV4cCI6MjA4Nzk5ODAzN30.S4seJqj703w_IgIkzv40Qi1230PTl_0RI4h5Lsrqh1s";
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
 const fmtK = (v) => { if (Math.abs(v) >= 1000000) return `$${(v/1000000).toFixed(1)}M`; if (Math.abs(v) >= 1000) return `$${(v/1000).toFixed(0)}K`; return `$${Math.round(v)}`; };
 
-// ─── STORAGE (simulated user accounts) ────────────────────────────────────────
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+// Local cache for session (Supabase is source of truth)
 const DB = {
+  // Session user cache
   getUser: () => { try { return JSON.parse(localStorage.getItem("re_user") || "null"); } catch { return null; } },
-  setUser: (u) => { try { localStorage.setItem("re_user", JSON.stringify(u)); } catch {} },
+  setUser: (u) => { try { if (u) localStorage.setItem("re_user", JSON.stringify(u)); else localStorage.removeItem("re_user"); } catch {} },
+
+  // Scenarios - local fallback cache
   getScenarios: () => { try { return JSON.parse(localStorage.getItem("re_scenarios") || "[]"); } catch { return []; } },
   saveScenario: (s) => {
     try {
       const all = DB.getScenarios();
       const idx = all.findIndex(x => x.id === s.id);
       if (idx >= 0) all[idx] = s; else all.unshift(s);
-      localStorage.setItem("re_scenarios", JSON.stringify(all.slice(0, 20)));
+      localStorage.setItem("re_scenarios", JSON.stringify(all.slice(0, 50)));
     } catch {}
   },
   deleteScenario: (id) => {
     try {
-      const all = DB.getScenarios().filter(x => x.id !== id);
-      localStorage.setItem("re_scenarios", JSON.stringify(all));
+      localStorage.setItem("re_scenarios", JSON.stringify(DB.getScenarios().filter(x => x.id !== id)));
     } catch {}
   },
+  setScenarios: (list) => { try { localStorage.setItem("re_scenarios", JSON.stringify(list)); } catch {} },
+
+  // Transactions - local fallback cache
   getTransactions: () => { try { return JSON.parse(localStorage.getItem("re_transactions") || "[]"); } catch { return []; } },
   saveTransactions: (t) => { try { localStorage.setItem("re_transactions", JSON.stringify(t)); } catch {} },
+};
+
+// ─── SUPABASE DATA LAYER ──────────────────────────────────────────────────────
+const SB = {
+  // Auth
+  signUp: async (email, password, name, zip) => {
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: { data: { name, zip } }
+    });
+    if (error) throw error;
+    return data.user;
+  },
+
+  signIn: async (email, password) => {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data.user;
+  },
+
+  signOut: async () => { await sb.auth.signOut(); },
+
+  getSession: async () => {
+    const { data } = await sb.auth.getSession();
+    return data.session;
+  },
+
+  getProfile: async (userId) => {
+    const { data } = await sb.from("profiles").select("*").eq("id", userId).single();
+    return data;
+  },
+
+  updateProfile: async (userId, updates) => {
+    const { error } = await sb.from("profiles").upsert({ id: userId, ...updates });
+    if (error) throw error;
+  },
+
+  // Scenarios
+  getScenarios: async (userId) => {
+    const { data } = await sb.from("scenarios").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    return data || [];
+  },
+
+  saveScenario: async (userId, scenario) => {
+    const { error } = await sb.from("scenarios").upsert({
+      id: scenario.id, user_id: userId, label: scenario.label,
+      type: scenario.type, date: scenario.date, data: scenario.data
+    });
+    if (error) throw error;
+  },
+
+  deleteScenario: async (id) => {
+    await sb.from("scenarios").delete().eq("id", id);
+  },
+
+  // Dashboard
+  getDashboard: async (userId) => {
+    const { data } = await sb.from("dashboard").select("*").eq("user_id", userId).single();
+    return data;
+  },
+
+  saveDashboard: async (userId, payload) => {
+    const { error } = await sb.from("dashboard").upsert({ user_id: userId, ...payload, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  },
+
+  // Transactions
+  getTransactions: async (userId) => {
+    const { data } = await sb.from("transactions").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    return (data || []).map(t => ({ id: t.id, desc: t.desc, amount: t.amount, category: t.category, necessity: t.necessity, date: t.date }));
+  },
+
+  saveTransactions: async (userId, transactions) => {
+    // Delete all and re-insert (simple approach for now)
+    await sb.from("transactions").delete().eq("user_id", userId);
+    if (transactions.length > 0) {
+      const rows = transactions.map(t => ({ id: t.id, user_id: userId, desc: t.desc, amount: t.amount, category: t.category, necessity: t.necessity, date: t.date }));
+      await sb.from("transactions").insert(rows);
+    }
+  },
+
+  // News
+  getNews: async () => {
+    const { data } = await sb.from("news_articles").select("*").eq("is_active", true).order("published_at", { ascending: false });
+    return data || [];
+  },
+
+  saveArticles: async (articles) => {
+    const { error } = await sb.from("news_articles").insert(articles);
+    if (error) throw error;
+  },
+
+  deleteArticle: async (id) => {
+    await sb.from("news_articles").update({ is_active: false }).eq("id", id);
+  },
+
+  // Reviews
+  submitReview: async (userId, name, rating, body) => {
+    const { error } = await sb.from("reviews").insert({ user_id: userId || null, name, rating, body });
+    if (error) throw error;
+  },
+
+  getApprovedReviews: async () => {
+    const { data } = await sb.from("reviews").select("*").eq("is_approved", true).order("created_at", { ascending: false });
+    return data || [];
+  },
+
+  approveReview: async (id, approved) => {
+    await sb.from("reviews").update({ is_approved: approved }).eq("id", id);
+  },
 };
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
@@ -984,34 +1106,32 @@ function AuthModal({ onClose, onAuth }) {
   const [password, setPassword] = useState("");
   const [zip, setZip] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const ACCOUNTS_KEY = "re_accounts";
-  const getAccounts = () => { try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || "{}"); } catch { return {}; } };
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setError("");
     if (!email || !password) { setError("Email and password are required."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-
-    const accounts = getAccounts();
-
-    if (mode === "signup") {
-      if (accounts[email.toLowerCase()]) { setError("An account with this email already exists. Try logging in."); return; }
-      const user = { id: Date.now().toString(), name: name || email.split("@")[0], email: email.toLowerCase(), zip, joined: new Date().toLocaleDateString() };
-      accounts[email.toLowerCase()] = { ...user, passwordHash: btoa(password) };
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-      DB.setUser(user);
-      onAuth(user);
-      onClose();
-    } else {
-      const account = accounts[email.toLowerCase()];
-      if (!account) { setError("No account found with this email. Try signing up."); return; }
-      if (account.passwordHash !== btoa(password)) { setError("Incorrect password. Please try again."); return; }
-      const user = { id: account.id, name: account.name, email: account.email, zip: account.zip, joined: account.joined };
-      DB.setUser(user);
-      onAuth(user);
-      onClose();
+    setLoading(true);
+    try {
+      if (mode === "signup") {
+        const sbUser = await SB.signUp(email, password, name || email.split("@")[0], zip);
+        const user = { id: sbUser.id, name: name || email.split("@")[0], email: sbUser.email, zip, joined: new Date().toLocaleDateString() };
+        DB.setUser(user);
+        onAuth(user);
+        onClose();
+      } else {
+        const sbUser = await SB.signIn(email, password);
+        const profile = await SB.getProfile(sbUser.id);
+        const user = { id: sbUser.id, name: profile?.name || sbUser.email.split("@")[0], email: sbUser.email, zip: profile?.zip || "", is_admin: profile?.is_admin || false, joined: new Date(sbUser.created_at).toLocaleDateString() };
+        DB.setUser(user);
+        onAuth(user);
+        onClose();
+      }
+    } catch (e) {
+      setError(e.message || "Something went wrong. Please try again.");
     }
+    setLoading(false);
   };
 
   return (
@@ -1030,10 +1150,10 @@ function AuthModal({ onClose, onAuth }) {
         <Input label="Password" value={password} onChange={setPassword} placeholder="Min 6 characters" type="password" />
         {mode === "signup" && <Input label="ZIP Code (for local cost defaults)" value={zip} onChange={setZip} placeholder="Optional" />}
         {error && <div style={{ fontSize: 12, color: C.red, background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 8, padding: "8px 12px", marginBottom: 14 }}>{error}</div>}
-        <Btn onClick={handleSubmit} style={{ width: "100%", padding: "14px 18px", fontSize: 15 }}>
-          {mode === "signup" ? "Create Account & Save Progress" : "Log In"}
+        <Btn onClick={handleSubmit} style={{ width: "100%", padding: "14px 18px", fontSize: 15, opacity: loading ? 0.7 : 1 }}>
+          {loading ? "Please wait…" : mode === "signup" ? "Create Account & Save Progress" : "Log In"}
         </Btn>
-        <p style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 12 }}>Your data is stored securely on this device · No email verification needed</p>
+        <p style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 12 }}>Your data is saved securely to the cloud · Access from any device</p>
       </div>
     </div>
   );
@@ -1204,6 +1324,9 @@ function CDTracker({ cd, onUpdate, onDelete }) {
 
 function Dashboard({ user, onLogout, onShowAuth }) {
   const [scenarios, setScenarios] = useState(DB.getScenarios());
+  useEffect(() => {
+    if (user?.id) SB.getScenarios(user.id).then(data => { if (data.length) { DB.setScenarios(data); setScenarios(data); } });
+  }, [user?.id]);
   const [activeTab, setActiveTab] = useState("overview");
   const [showEmail, setShowEmail] = useState(true);
 
@@ -1224,7 +1347,7 @@ function Dashboard({ user, onLogout, onShowAuth }) {
   const [showAddCD, setShowAddCD] = useState(false);
 
   const refresh = () => setScenarios(DB.getScenarios());
-  const handleDeleteScenario = (id) => { DB.deleteScenario(id); refresh(); };
+  const handleDeleteScenario = (id) => { DB.deleteScenario(id); SB.deleteScenario(id).catch(()=>{}); refresh(); };
 
   // Persist helpers
   const saveIncome = (v) => { setMonthlyIncome(v); DB_DASH.set("income", v); };
@@ -1560,40 +1683,34 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
 
   const show = (text, type = "ok") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "" }), 3500); };
 
-  const saveProfile = () => {
+  const saveProfile = async () => {
     if (!displayName.trim()) { show("Display name can't be empty.", "err"); return; }
-    onUpdate({ ...user, name: displayName.trim(), zip });
+    try {
+      await SB.updateProfile(user.id, { name: displayName.trim(), zip });
+      onUpdate({ ...user, name: displayName.trim(), zip });
+      show("Profile updated! ✓");
+    } catch (e) { show(e.message || "Failed to save.", "err"); }
   };
 
-  const saveEmail = () => {
+  const saveEmail = async () => {
     if (!email.includes("@")) { show("Enter a valid email address.", "err"); return; }
     try {
-      const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
-      if (accounts[email.toLowerCase()] && email.toLowerCase() !== user.email.toLowerCase()) {
-        show("That email is already in use.", "err"); return;
-      }
-      const oldEntry = accounts[user.email.toLowerCase()];
-      if (oldEntry) {
-        delete accounts[user.email.toLowerCase()];
-        accounts[email.toLowerCase()] = { ...oldEntry, email: email.toLowerCase() };
-        localStorage.setItem("re_accounts", JSON.stringify(accounts));
-      }
-    } catch {}
-    onUpdate({ ...user, email: email.toLowerCase() });
+      const { error } = await sb.auth.updateUser({ email: email.toLowerCase() });
+      if (error) { show(error.message, "err"); return; }
+      onUpdate({ ...user, email: email.toLowerCase() });
+      show("Email updated! Check your inbox to confirm the change. ✓");
+    } catch (e) { show(e.message || "Failed to update email.", "err"); }
   };
 
-  const savePassword = () => {
+  const savePassword = async () => {
     if (newPassword.length < 6) { show("Password must be at least 6 characters.", "err"); return; }
     if (newPassword !== confirmPassword) { show("Passwords don't match. Please try again.", "err"); return; }
     try {
-      const accounts = JSON.parse(localStorage.getItem("re_accounts") || "{}");
-      if (accounts[user.email.toLowerCase()]) {
-        accounts[user.email.toLowerCase()].passwordHash = btoa(newPassword);
-        localStorage.setItem("re_accounts", JSON.stringify(accounts));
-      }
-    } catch {}
-    setNewPassword(""); setConfirmPassword("");
-    show("Password updated successfully! ✓");
+      const { error } = await sb.auth.updateUser({ password: newPassword });
+      if (error) { show(error.message, "err"); return; }
+      setNewPassword(""); setConfirmPassword("");
+      show("Password updated successfully! ✓");
+    } catch (e) { show(e.message || "Failed to update password.", "err"); }
   };
 
   const Section = ({ title, children }) => (
@@ -2996,6 +3113,23 @@ export default function RealityEstimator() {
     setTimeout(() => setToast(null), 30000);
   };
 
+  // Restore Supabase session on load
+  useEffect(() => {
+    SB.getSession().then(async (session) => {
+      if (session?.user && !DB.getUser()) {
+        try {
+          const profile = await SB.getProfile(session.user.id);
+          const u = { id: session.user.id, name: profile?.name || session.user.email.split("@")[0], email: session.user.email, zip: profile?.zip || "", is_admin: profile?.is_admin || false };
+          DB.setUser(u); setUser(u);
+        } catch {}
+      }
+    });
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") { DB.setUser(null); setUser(null); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   // Update global C before this render so all child components get correct colors
   C = dark ? DARK : LIGHT;
 
@@ -3009,10 +3143,11 @@ export default function RealityEstimator() {
 
   const handleSave = (scenario) => {
     DB.saveScenario(scenario);
+    if (user?.id) SB.saveScenario(user.id, scenario).catch(() => {});
     showToast("✓ Scenario saved! Find it in Dashboard → Scenarios.");
   };
 
-  const handleLogout = () => { DB.setUser(null); setUser(null); };
+  const handleLogout = async () => { await SB.signOut(); DB.setUser(null); setUser(null); };
 
   const navItems = [
     { id: "home", icon: "⊞", label: "Home" },
