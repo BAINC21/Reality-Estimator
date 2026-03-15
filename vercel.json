@@ -4,9 +4,13 @@
   "functions": {
     "api/chat.js": {
       "maxDuration": 30
+    },
+    "api/create-checkout.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
-    { "source": "/api/chat", "destination": "/api/chat" }
+    { "source": "/api/chat", "destination": "/api/chat" },
+    { "source": "/api/create-checkout", "destination": "/api/create-checkout" }
   ]
 }
