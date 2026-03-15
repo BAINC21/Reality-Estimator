@@ -2555,8 +2555,16 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
       </Section>
 
       <Section title="🔒 Change Password">
-        <Input label="New Password" value={newPassword} onChange={setNewPassword} placeholder="Min 6 characters" type="password" />
-        <Input label="Re-enter New Password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Must match above" type="password" />
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>New Password</div>
+          <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters"
+            style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${C.border}`, borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none", color: C.text, background: C.cardAlt, boxSizing: "border-box" }} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Re-enter New Password</div>
+          <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Must match above"
+            style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${C.border}`, borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none", color: C.text, background: C.cardAlt, boxSizing: "border-box" }} />
+        </div>
         <Btn onClick={savePassword} style={{ width: "100%" }}>Update Password</Btn>
       </Section>
 
@@ -4261,7 +4269,7 @@ function AdminPanel({ onClose, user, showToast }) {
 
   const loadUsers = async () => {
     setLoading(true);
-    const { data } = await sb.from("profiles").select("id, name, zip, is_admin, created_at").order("created_at", { ascending: false });
+    const { data } = await sb.from("profiles").select("id, name, zip, is_admin, is_pro, created_at").order("created_at", { ascending: false });
     setUsers(data || []);
     setLoading(false);
   };
@@ -4306,6 +4314,24 @@ function AdminPanel({ onClose, user, showToast }) {
   const deleteArticle = async (id) => { await sb.from("news_articles").delete().eq("id", id); loadArticles(); showToast("Article deleted."); };
   const toggleReview = async (id, cur) => { await sb.from("reviews").update({ is_approved: !cur }).eq("id", id); loadReviews(); };
   const deleteReview = async (id) => { await sb.from("reviews").delete().eq("id", id); loadReviews(); };
+  const togglePro = async (userId, curPro) => {
+    const newPro = !curPro;
+    await sb.from("profiles").update({ is_pro: newPro }).eq("id", userId);
+    if (newPro) {
+      // Add manual sub record
+      const { data: existing } = await sb.from("pro_subscriptions").select("id").eq("user_id", userId).single().catch(() => ({ data: null }));
+      if (!existing) {
+        const profile = users.find(u => u.id === userId);
+        await sb.from("pro_subscriptions").insert({ user_id: userId, email: profile?.email || "", status: "active", plan: "manual", amount: 0, last_payment_at: new Date().toISOString() }).catch(() => {});
+      } else {
+        await sb.from("pro_subscriptions").update({ status: "active" }).eq("user_id", userId).catch(() => {});
+      }
+    } else {
+      await sb.from("pro_subscriptions").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("user_id", userId).catch(() => {});
+    }
+    loadUsers();
+    showToast(`Pro ${newPro ? "granted" : "removed"} successfully.`);
+  };
   const [replyDraft, setReplyDraft] = useState({});
   const [replyingTo, setReplyingTo] = useState(null);
   const saveReply = async (id) => {
@@ -4476,15 +4502,19 @@ function AdminPanel({ onClose, user, showToast }) {
               </div>
               {loading && <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 24 }}>Loading…</div>}
               <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: "hidden" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 70px", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>
-                  <span>Name</span><span>ZIP</span><span>Joined</span><span>Role</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 60px 80px", padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase" }}>
+                  <span>Name</span><span>ZIP</span><span>Joined</span><span>Role</span><span>Pro</span>
                 </div>
                 {users.map((u, i) => (
-                  <div key={u.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 90px 70px", padding: "12px 16px", borderBottom: i < users.length - 1 ? `1px solid ${C.border}` : "none", alignItems: "center" }}>
+                  <div key={u.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 60px 80px", padding: "12px 16px", borderBottom: i < users.length - 1 ? `1px solid ${C.border}` : "none", alignItems: "center" }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{u.name || "—"}</span>
                     <span style={{ fontSize: 12, color: C.muted }}>{u.zip || "—"}</span>
                     <span style={{ fontSize: 11, color: C.muted }}>{new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                     <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700, background: u.is_admin ? C.amberBg : C.primaryLight, color: u.is_admin ? C.amber : C.primary }}>{u.is_admin ? "Admin" : "User"}</span>
+                    <button onClick={() => togglePro(u.id, u.is_pro)}
+                      style={{ fontSize: 10, padding: "3px 8px", borderRadius: 6, border: `1px solid ${u.is_pro ? "#f59e0b" : C.border}`, background: u.is_pro ? "#f59e0b22" : C.cardAlt, color: u.is_pro ? "#f59e0b" : C.muted, cursor: "pointer", fontWeight: 700, fontFamily: "inherit" }}>
+                      {u.is_pro ? "⚡ Pro" : "Free"}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -4529,7 +4559,17 @@ function AdminPanel({ onClose, user, showToast }) {
                       </div>
                       <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>
                         Started {new Date(s.started_at || s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {s.last_payment_at && ` · Last payment ${new Date(s.last_payment_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
                         {s.cancelled_at && ` · Cancelled ${new Date(s.cancelled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                        {(s.status === "cancelling" || s.status === "cancelled") && s.last_payment_at && (() => {
+                          const expiry = new Date(new Date(s.last_payment_at).getTime() + 30 * 86400000);
+                          const daysLeft = Math.max(0, Math.ceil((expiry - Date.now()) / 86400000));
+                          return (
+                            <span style={{ color: daysLeft > 0 ? C.amber : C.red, fontWeight: 700 }}>
+                              {" · "}{daysLeft > 0 ? `Pro expires in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}` : "Pro expired"}
+                            </span>
+                          );
+                        })()}
                       </div>
                       {s.stripe_subscription_id && (
                         <div style={{ fontSize: 10, color: C.muted, fontFamily: "monospace" }}>{s.stripe_subscription_id}</div>
