@@ -1649,7 +1649,15 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
 
   // CD tracker
   const [cds, setCDs] = useState(() => DB_DASH.get("cds") || []);
-  const [bills, setBills] = useState(() => DB_DASH.get("bills") || { rent: "", carPayment: "", insurances: [{ id: "1", label: "Car Insurance", amount: "" }], others: [] });
+  const [bills, setBills] = useState(() => {
+    const saved = DB_DASH.get("bills") || {};
+    return {
+      rent: saved.rent || "",
+      carPayment: saved.carPayment || "",
+      insurances: Array.isArray(saved.insurances) ? saved.insurances : [{ id: "1", label: "Car Insurance", amount: "" }],
+      others: Array.isArray(saved.others) ? saved.others : [],
+    };
+  });
   const [showAddCD, setShowAddCD] = useState(false);
 
   const refresh = () => setScenarios(DB.getScenarios());
@@ -2455,15 +2463,22 @@ function ProStatusCard({ user, onCancelled }) {
   );
 }
 
+function SettingsSection({ title, children }) {
+  return (
+    <Card style={{ marginBottom: 0 }}>
+      <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>{title}</div>
+      {children}
+    </Card>
+  );
+}
+
 function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
   const [displayName, setDisplayName] = useState(user.name || "");
   const [email, setEmail] = useState(user.email || "");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [zip, setZip] = useState(user.zip || "");
-  const [msg, setMsg] = useState({ text: "", type: "" });
-
-  const show = (text, type = "ok") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "" }), 3500); };
+  const [msg, setMsg] = useState({ text: "", type: "" });  const show = (text, type = "ok") => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "" }), 3500); };
 
   const saveProfile = async () => {
     if (!displayName.trim()) { show("Display name can't be empty.", "err"); return; }
@@ -2494,13 +2509,6 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
       show("Password updated successfully! ✓");
     } catch (e) { show(e.message || "Failed to update password.", "err"); }
   };
-
-  const Section = ({ title, children }) => (
-    <Card style={{ marginBottom: 0 }}>
-      <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 16, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>{title}</div>
-      {children}
-    </Card>
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2543,18 +2551,18 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
         </div>
       )}
 
-      <Section title="👤 Display Name">
+      <SettingsSection title="👤 Display Name">
         <Input label="Name shown across the app" value={displayName} onChange={setDisplayName} placeholder="Your name" />
         <Input label="ZIP Code" value={zip} onChange={setZip} placeholder="Optional — used for local cost defaults" />
         <Btn onClick={saveProfile} style={{ width: "100%" }}>Save Profile</Btn>
-      </Section>
+      </SettingsSection>
 
-      <Section title="📧 Email Address">
+      <SettingsSection title="📧 Email Address">
         <Input label="Email" value={email} onChange={setEmail} placeholder="you@email.com" type="email" />
         <Btn onClick={saveEmail} style={{ width: "100%" }}>Update Email</Btn>
-      </Section>
+      </SettingsSection>
 
-      <Section title="🔒 Change Password">
+      <SettingsSection title="🔒 Change Password">
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>New Password</div>
           <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters"
@@ -2566,9 +2574,9 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
             style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${C.border}`, borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none", color: C.text, background: C.cardAlt, boxSizing: "border-box" }} />
         </div>
         <Btn onClick={savePassword} style={{ width: "100%" }}>Update Password</Btn>
-      </Section>
+      </SettingsSection>
 
-      <Section title="🔍 Privacy">
+      <SettingsSection title="🔍 Privacy">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
           <div>
             <div style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Show email on dashboard</div>
@@ -2579,12 +2587,12 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
             <div style={{ width: 20, height: 20, borderRadius: 999, background: "#fff", position: "absolute", top: 3, transition: "left 0.2s", left: showEmail ? 24 : 4 }} />
           </button>
         </div>
-      </Section>
+      </SettingsSection>
 
-      <Section title="⚠️ Account">
+      <SettingsSection title="⚠️ Account">
         <div style={{ fontSize: 13, color: C.muted, marginBottom: 12 }}>Logging out will clear your session. Your saved data stays on this device.</div>
         <Btn onClick={onLogout} variant="danger" style={{ width: "100%" }}>Log Out</Btn>
-      </Section>
+      </SettingsSection>
 
     </div>
   );
