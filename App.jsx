@@ -1616,18 +1616,29 @@ function CDTracker({ cd, onUpdate, onDelete }) {
 }
 
 function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onShowPro }) {
-  const [scenarios, setScenarios] = useState(DB.getScenarios());
+  // Safe array/object helpers — prevent crashes from corrupt localStorage or Supabase data
+  const safeArr = (v) => Array.isArray(v) ? v : [];
+  const safeBills = (v) => ({
+    rent: v?.rent || "",
+    carPayment: v?.carPayment || "",
+    insurances: Array.isArray(v?.insurances) ? v.insurances : [{ id: "1", label: "Car Insurance", amount: "" }],
+    others: Array.isArray(v?.others) ? v.others : [],
+  });
+
+  const [scenarios, setScenarios] = useState(() => safeArr(DB.getScenarios()));
   useEffect(() => {
     if (user?.id) {
-      SB.getScenarios(user.id).then(data => { if (data.length) { DB.setScenarios(data); setScenarios(data); } });
-      // Load dashboard data from Supabase on login (cross-device sync)
+      SB.getScenarios(user.id).then(data => {
+        const safe = safeArr(data);
+        if (safe.length) { DB.setScenarios(safe); setScenarios(safe); }
+      }).catch(() => {});
       SB.getDashboard(user.id).then(data => {
         if (data) {
           if (data.income != null) { setMonthlyIncome(data.income); DB_DASH.set("income", data.income); }
-          if (data.income_streams) { setIncomeStreams(data.income_streams); DB_DASH.set("incomeStreams", data.income_streams); }
-          if (data.buckets) { setBuckets(data.buckets); DB_DASH.set("buckets", data.buckets); }
-          if (data.cds) { setCDs(data.cds); DB_DASH.set("cds", data.cds); }
-          if (data.bills) { setBills(data.bills); DB_DASH.set("bills", data.bills); }
+          if (data.income_streams) { const v = safeArr(data.income_streams); setIncomeStreams(v); DB_DASH.set("incomeStreams", v); }
+          if (data.buckets) { const v = safeArr(data.buckets); setBuckets(v); DB_DASH.set("buckets", v); }
+          if (data.cds) { const v = safeArr(data.cds); setCDs(v); DB_DASH.set("cds", v); }
+          if (data.bills) { const v = safeBills(data.bills); setBills(v); DB_DASH.set("bills", v); }
         }
       }).catch(() => {});
     }
@@ -1636,28 +1647,20 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
   const [expandedScenarioId, setExpandedScenarioId] = useState(null);
 
   // Income tracker
-  const [monthlyIncome, setMonthlyIncome] = useState(() => DB_DASH.get("income") || 4000);
-  const [incomeStreams, setIncomeStreams] = useState(() => DB_DASH.get("incomeStreams") || []);
+  const [monthlyIncome, setMonthlyIncome] = useState(() => { try { return parseFloat(DB_DASH.get("income")) || 4000; } catch { return 4000; } });
+  const [incomeStreams, setIncomeStreams] = useState(() => { try { return safeArr(DB_DASH.get("incomeStreams")); } catch { return []; } });
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [newIncomeLabel, setNewIncomeLabel] = useState("");
   const [newIncomeAmt, setNewIncomeAmt] = useState("");
   const [newIncomeType, setNewIncomeType] = useState("monthly");
 
   // Savings buckets
-  const [buckets, setBuckets] = useState(() => DB_DASH.get("buckets") || []);
+  const [buckets, setBuckets] = useState(() => { try { return safeArr(DB_DASH.get("buckets")); } catch { return []; } });
   const [showAddBucket, setShowAddBucket] = useState(false);
 
   // CD tracker
-  const [cds, setCDs] = useState(() => DB_DASH.get("cds") || []);
-  const [bills, setBills] = useState(() => {
-    const saved = DB_DASH.get("bills") || {};
-    return {
-      rent: saved.rent || "",
-      carPayment: saved.carPayment || "",
-      insurances: Array.isArray(saved.insurances) ? saved.insurances : [{ id: "1", label: "Car Insurance", amount: "" }],
-      others: Array.isArray(saved.others) ? saved.others : [],
-    };
-  });
+  const [cds, setCDs] = useState(() => { try { return safeArr(DB_DASH.get("cds")); } catch { return []; } });
+  const [bills, setBills] = useState(() => { try { return safeBills(DB_DASH.get("bills")); } catch { return safeBills({}); } });
   const [showAddCD, setShowAddCD] = useState(false);
 
   const refresh = () => setScenarios(DB.getScenarios());
@@ -1691,13 +1694,13 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
     saveCDs([...cds, cd]);
   };
 
-  const totalMonthlyIncome = monthlyIncome + incomeStreams.filter(s => s.type === "monthly").reduce((a, s) => a + s.amount, 0)
-    + incomeStreams.filter(s => s.type === "annual").reduce((a, s) => a + s.amount / 12, 0);
-  const totalSavingsTarget = buckets.reduce((a, b) => a + b.target, 0);
-  const totalSavingsSaved = buckets.reduce((a, b) => a + b.saved, 0);
-  const totalMonthlySavings = buckets.reduce((a, b) => a + b.monthly, 0);
-  const totalCDValue = cds.reduce((a, cd) => { const v = cd.principal * Math.pow(1 + (cd.apy / 100) / 12, cd.termMonths); return a + v; }, 0);
-  const totalCDPrincipal = cds.reduce((a, cd) => a + cd.principal, 0);
+  const totalMonthlyIncome = monthlyIncome + safeArr(incomeStreams).filter(s => s.type === "monthly").reduce((a, s) => a + (s.amount || 0), 0)
+    + safeArr(incomeStreams).filter(s => s.type === "annual").reduce((a, s) => a + (s.amount || 0) / 12, 0);
+  const totalSavingsTarget = safeArr(buckets).reduce((a, b) => a + (b.target || 0), 0);
+  const totalSavingsSaved = safeArr(buckets).reduce((a, b) => a + (b.saved || 0), 0);
+  const totalMonthlySavings = safeArr(buckets).reduce((a, b) => a + (b.monthly || 0), 0);
+  const totalCDValue = safeArr(cds).reduce((a, cd) => { try { const v = (cd.principal || 0) * Math.pow(1 + ((cd.apy || 0) / 100) / 12, cd.termMonths || 12); return a + v; } catch { return a; } }, 0);
+  const totalCDPrincipal = safeArr(cds).reduce((a, cd) => a + (cd.principal || 0), 0);
 
   const icons = { moving: "🏠", car: "🚗", project: "🔨", recession: "📉", debt: "💳" };
   const colors = { moving: C.primary, car: "#0284c7", project: "#d97706", recession: "#dc2626" };
