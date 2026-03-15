@@ -2336,6 +2336,125 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
 }
 
 // ─── SETTINGS PANEL ───────────────────────────────────────────────────────────
+function ProStatusCard({ user, onCancelled }) {
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelFeedback, setCancelFeedback] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const REASONS = [
+    { value: "", label: "Select a reason…" },
+    { value: "price", label: "Price is too high" },
+    { value: "features", label: "Missing features I need" },
+    { value: "not_using", label: "Not using it enough" },
+    { value: "found_alternative", label: "Found a better alternative" },
+    { value: "temporary", label: "Just taking a break" },
+    { value: "other", label: "Other" },
+  ];
+
+  const handleCancel = async () => {
+    if (!cancelReason) return;
+    setSubmitting(true);
+    try {
+      await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, reason: cancelReason, feedback: cancelFeedback }),
+      });
+      setDone(true);
+      // Close after 10 seconds and update parent
+      setTimeout(() => {
+        setShowCancel(false);
+        setDone(false);
+        onCancelled();
+      }, 10000);
+    } catch {
+      alert("Something went wrong. Please try again.");
+    }
+    setSubmitting(false);
+  };
+
+  return (
+    <>
+      <div style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f)", borderRadius: 16, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>⚡</div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#fff" }}>Reality Estimator Pro</div>
+              <span style={{ fontSize: 10, fontWeight: 900, color: "#0f172a", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: 4, padding: "2px 7px" }}>PRO</span>
+            </div>
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>Active subscription · All features unlocked</div>
+          </div>
+        </div>
+        <button onClick={() => setShowCancel(true)}
+          style={{ width: "100%", padding: "10px", borderRadius: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#64748b", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+          Manage Subscription
+        </button>
+      </div>
+
+      {/* Cancel modal */}
+      {showCancel && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={() => !done && setShowCancel(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: "24px 24px 0 0", width: "100%", maxWidth: 480, padding: 28, boxShadow: "0 -20px 60px rgba(0,0,0,0.4)" }}>
+
+            {done ? (
+              /* Thank you screen */
+              <div style={{ textAlign: "center", padding: "20px 0" }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>💙</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: C.text, marginBottom: 10 }}>
+                  {cancelFeedback ? "Hate to see you go, but thank you for the feedback!" : "Hate to see you go, but thank you for trying out Pro!"}
+                </div>
+                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.7 }}>
+                  Your Pro access continues until the end of your current billing period. We hope to see you back soon. 🙏
+                </div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 16 }}>This window will close automatically…</div>
+              </div>
+            ) : (
+              /* Cancel form */
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                  <div style={{ fontWeight: 900, fontSize: 17, color: C.text }}>Cancel Subscription</div>
+                  <button onClick={() => setShowCancel(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
+                </div>
+
+                <div style={{ background: `${C.green}12`, border: `1px solid ${C.green}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, color: C.green, fontWeight: 700 }}>✓ Your Pro access stays active until your next billing date</div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>You won't be charged again after cancelling.</div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>Why would you like to cancel today?</div>
+                  <select value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                    style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${cancelReason ? C.primary : C.border}`, borderRadius: 10, fontSize: 14, fontFamily: "inherit", color: C.text, background: C.cardAlt, outline: "none", boxSizing: "border-box" }}>
+                    {REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8 }}>Describe here <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></div>
+                  <textarea value={cancelFeedback} onChange={e => setCancelFeedback(e.target.value)} rows={3}
+                    placeholder="Any other details that might help us improve…"
+                    style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontFamily: "inherit", color: C.text, background: C.cardAlt, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+                </div>
+
+                <button onClick={handleCancel} disabled={!cancelReason || submitting}
+                  style={{ width: "100%", padding: "13px", borderRadius: 10, background: cancelReason && !submitting ? C.red : C.border, border: "none", color: cancelReason && !submitting ? "#fff" : C.muted, fontWeight: 900, fontSize: 15, cursor: cancelReason && !submitting ? "pointer" : "not-allowed", fontFamily: "inherit", transition: "all 0.15s" }}>
+                  {submitting ? "Processing…" : "Finalize Cancellation"}
+                </button>
+                <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginTop: 10 }}>
+                  You'll keep Pro until your billing period ends
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
   const [displayName, setDisplayName] = useState(user.name || "");
   const [email, setEmail] = useState(user.email || "");
@@ -2397,18 +2516,7 @@ function SettingsPanel({ user, onUpdate, onLogout, showEmail, onToggleEmail }) {
 
       {/* PRO STATUS */}
       {user.is_pro ? (
-        <div style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f)", borderRadius: 16, padding: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>⚡</div>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: "#fff" }}>Reality Estimator Pro</div>
-                <span style={{ fontSize: 10, fontWeight: 900, color: "#0f172a", background: "linear-gradient(135deg, #f59e0b, #d97706)", borderRadius: 4, padding: "2px 7px" }}>PRO</span>
-              </div>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>Active subscription · All features unlocked</div>
-            </div>
-          </div>
-        </div>
+        <ProStatusCard user={user} onCancelled={() => onUpdate({ ...user, is_pro: false })} />
       ) : (
         <div style={{ background: "linear-gradient(135deg, #0f172a, #1e3a5f)", borderRadius: 16, padding: 20, marginBottom: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
@@ -4114,11 +4222,28 @@ function AdminPanel({ onClose, user, showToast }) {
   const [processing, setProcessing] = useState(false);
   const [processLog, setProcessLog] = useState("");
 
+  const [subs, setSubs] = useState([]);
+
   useEffect(() => {
     if (tab === "news") loadArticles();
     if (tab === "reviews") loadReviews();
     if (tab === "users") loadUsers();
+    if (tab === "subs") loadSubs();
   }, [tab]);
+
+  const loadSubs = async () => {
+    setLoading(true);
+    const { data } = await sb.from("pro_subscriptions").select("*").order("created_at", { ascending: false });
+    setSubs(data || []);
+    setLoading(false);
+  };
+
+  const cancelSub = async (id, userId) => {
+    await sb.from("pro_subscriptions").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", id);
+    await sb.from("profiles").update({ is_pro: false }).eq("id", userId);
+    loadSubs();
+    showToast("Subscription cancelled.");
+  };
 
   const loadArticles = async () => {
     setLoading(true);
@@ -4191,7 +4316,7 @@ function AdminPanel({ onClose, user, showToast }) {
     loadReviews();
   };
 
-  const tabs = [{ id: "news", label: "📰 News" }, { id: "reviews", label: "⭐ Reviews" }, { id: "users", label: "👥 Users" }];
+  const tabs = [{ id: "news", label: "📰 News" }, { id: "reviews", label: "⭐ Reviews" }, { id: "users", label: "👥 Users" }, { id: "subs", label: "⚡ Subscriptions" }];
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 200, display: "flex", justifyContent: "flex-end" }}>
@@ -4363,6 +4488,62 @@ function AdminPanel({ onClose, user, showToast }) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* SUBSCRIPTIONS TAB */}
+          {tab === "subs" && (
+            <div>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                {[
+                  { label: "Active", value: subs.filter(s => s.status === "active").length, color: C.green },
+                  { label: "Cancelled", value: subs.filter(s => s.status === "cancelled").length, color: C.red },
+                  { label: "MRR", value: `$${(subs.filter(s => s.status === "active").length * 4.99).toFixed(2)}`, color: "#f59e0b" },
+                  { label: "Total Revenue", value: `$${(subs.length * 4.99).toFixed(2)}`, color: C.primary },
+                ].map(s => (
+                  <div key={s.label} style={{ flex: 1, minWidth: 80, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 600 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              {loading && <div style={{ color: C.muted, fontSize: 13, textAlign: "center", padding: 24 }}>Loading…</div>}
+              {!loading && subs.length === 0 && (
+                <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>⚡</div>
+                  No subscriptions yet.
+                </div>
+              )}
+              {subs.map((s) => (
+                <div key={s.id} style={{ background: C.card, border: `1px solid ${s.status === "active" ? C.greenBorder : C.border}`, borderRadius: 12, padding: "14px 16px", marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{s.email || "—"}</span>
+                        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, fontWeight: 700,
+                          background: s.status === "active" ? C.greenBg : C.redBg,
+                          color: s.status === "active" ? C.green : C.red }}>
+                          {s.status === "active" ? "Active" : "Cancelled"}
+                        </span>
+                        <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 700 }}>${s.amount || "4.99"}/mo</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: C.muted, marginBottom: 3 }}>
+                        Started {new Date(s.started_at || s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {s.cancelled_at && ` · Cancelled ${new Date(s.cancelled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                      </div>
+                      {s.stripe_subscription_id && (
+                        <div style={{ fontSize: 10, color: C.muted, fontFamily: "monospace" }}>{s.stripe_subscription_id}</div>
+                      )}
+                    </div>
+                    {s.status === "active" && (
+                      <button onClick={() => cancelSub(s.id, s.user_id)}
+                        style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, border: `1px solid ${C.redBorder}`, background: C.redBg, color: C.red, cursor: "pointer", fontWeight: 700, marginLeft: 12, flexShrink: 0 }}>
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
