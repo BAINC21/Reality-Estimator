@@ -1,5 +1,4 @@
-@@ -1529,50 +1529,150 @@ function CDTracker({ cd, onUpdate, onDelete }) {
-              <div style={{ fontSize: 11, color: C.muted }}>
+<div style={{ fontSize: 11, color: C.muted }}>
                 Matures: {maturityDate.toLocaleDateString()} {!isMatured && `· ${daysLeft} days left`}
               </div>
             </div>
@@ -34,9 +33,9 @@ function FreedomIncomeSim({ user, onSave }) {
 
   const totalTakeHomeNeeded = freedomLifestyle + responsibilities + savingsGoals + miscellaneous;
   const safeTaxRate = Math.max(0, Math.min(95, taxRate));
-  const taxMultiplier = 1 - (safeTaxRate / 100);
-  const grossIncomeNeeded = taxMultiplier > 0 ? Math.round(totalTakeHomeNeeded / taxMultiplier) : 0;
-  const taxesEstimated = Math.round(grossIncomeNeeded * (safeTaxRate / 100));
+  // Tax rate is applied to take-home target (example: 38% of take-home)
+  const taxesEstimated = Math.round(totalTakeHomeNeeded * (safeTaxRate / 100));
+  const grossIncomeNeeded = totalTakeHomeNeeded + taxesEstimated;
   const monthlyGrossIncome = Math.round(grossIncomeNeeded / 12);
   const monthlyTakeHome = Math.round(totalTakeHomeNeeded / 12);
 
