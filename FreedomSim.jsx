@@ -974,63 +974,94 @@ export function FreedomSim({ user, onSave, onShowPro }) {
           </div>
         ))}
 
-        {/* AI career recommendations button */}
-        <button
-          onClick={runCareerAI}
-          disabled={aiCareersLoading}
-          style={{
-            width: "100%", padding: "14px", borderRadius: 14, marginTop: 4,
-            background: aiCareersLoading
-              ? C.cardAlt
-              : "linear-gradient(135deg, #0369a1, #0284c7)",
-            border: `1.5px solid ${aiCareersLoading ? C.border : "#0284c7"}`,
-            color: aiCareersLoading ? C.muted : "#fff",
-            fontWeight: 800, fontSize: 14, cursor: aiCareersLoading ? "not-allowed" : "pointer",
-            fontFamily: "inherit", transition: "opacity 0.2s",
-          }}
-        >
-          {aiCareersLoading
-            ? "✦ Generating recommendations…"
-            : showAiCareers && aiCareers
-            ? "✦ Refresh AI Career Recommendations"
-            : "✦ Get Personalized AI Career Recommendations"}
-        </button>
-
-        {/* AI career output */}
-        {aiCareers && showAiCareers && (
-          <div style={{
-            background: C.bg === "#0a0f1e"
-              ? "linear-gradient(135deg, #0c1f38, #0f172a)"
-              : "linear-gradient(135deg, #eff6ff, #e0f2fe)",
-            border: `1.5px solid ${C.primary}44`,
-            borderRadius: 14, padding: 18, marginTop: 12,
-          }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div style={{
-                width: 30, height: 30, borderRadius: 9,
-                background: "linear-gradient(135deg, #0284c7, #0369a1)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 14, flexShrink: 0, color: "#fff", fontWeight: 700,
-              }}>✦</div>
-              <div style={{
-                fontSize: 13,
-                color: C.bg === "#0a0f1e" ? "#bae6fd" : "#0c4a6e",
-                lineHeight: 1.85, whiteSpace: "pre-wrap",
-              }}>
-                {aiCareers}
-              </div>
-            </div>
-            <div style={{
-              fontSize: 10, color: C.muted, marginTop: 14,
-              paddingTop: 10, borderTop: `1px solid ${C.border}`,
-            }}>
-              ⚠️ AI-generated suggestions for exploration only. Not career or financial advice.
-              Research each path thoroughly and speak with professionals before making decisions.
-            </div>
-          </div>
-        )}
-      </Card>
-
+       {/* AI career recommendations — opt-in only */}
+{!showAiCareers && !aiCareers && (
+  <div style={{
+    marginTop: 10, padding: "12px 16px",
+    background: C.cardAlt, border: `1px solid ${C.border}`,
+    borderRadius: 12, display: "flex", justifyContent: "space-between", alignItems: "center",
+  }}>
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>✦ AI Career Recommendations</div>
+      <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+        Optional · uses AI to suggest paths for your specific gap
+      </div>
     </div>
-  );
-}
+    <button
+      onClick={() => setShowAiCareers(true)}
+      style={{
+        padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`,
+        background: "transparent", color: C.primary, fontWeight: 700,
+        fontSize: 12, cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+      }}
+    >
+      Show
+    </button>
+  </div>
+)}
+
+{showAiCareers && !aiCareers && (
+  <button
+    onClick={runCareerAI}
+    disabled={aiCareersLoading}
+    style={{
+      width: "100%", padding: "14px", borderRadius: 14, marginTop: 4,
+      background: aiCareersLoading
+        ? C.cardAlt
+        : "linear-gradient(135deg, #0369a1, #0284c7)",
+      border: `1.5px solid ${aiCareersLoading ? C.border : "#0284c7"}`,
+      color: aiCareersLoading ? C.muted : "#fff",
+      fontWeight: 800, fontSize: 14,
+      cursor: aiCareersLoading ? "not-allowed" : "pointer",
+      fontFamily: "inherit",
+    }}
+  >
+    {aiCareersLoading ? "✦ Generating…" : "✦ Generate My Career Recommendations"}
+  </button>
+)}
+
+{aiCareers && showAiCareers && (
+  <div style={{
+    background: C.bg === "#0a0f1e"
+      ? "linear-gradient(135deg, #0c1f38, #0f172a)"
+      : "linear-gradient(135deg, #eff6ff, #e0f2fe)",
+    border: `1.5px solid ${C.primary}44`,
+    borderRadius: 14, padding: 18, marginTop: 12,
+  }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: "linear-gradient(135deg, #0284c7, #0369a1)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 13, color: "#fff", fontWeight: 700,
+        }}>✦</div>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#0284c7" }}>AI Recommendations</span>
+      </div>
+      <button
+        onClick={() => { setAiCareers(""); setShowAiCareers(false); }}
+        style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: 4 }}
+      >✕</button>
+    </div>
+    <div style={{
+      fontSize: 13,
+      color: C.bg === "#0a0f1e" ? "#bae6fd" : "#0c4a6e",
+      lineHeight: 1.85, whiteSpace: "pre-wrap",
+    }}>
+      {aiCareers}
+    </div>
+    <div style={{
+      fontSize: 10, color: C.muted, marginTop: 14,
+      paddingTop: 10, borderTop: `1px solid ${C.border}`,
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+    }}>
+      <span>⚠️ For exploration only. Not career or financial advice.</span>
+      <button
+        onClick={runCareerAI}
+        style={{ background: "none", border: "none", color: C.primary, cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}
+      >
+        ↺ Regenerate
+      </button>
+    </div>
+  </div>
+)}
