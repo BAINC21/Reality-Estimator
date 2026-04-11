@@ -1066,6 +1066,8 @@ export function FreedomSim({ user, onSave, onShowPro }) {
   </div>
 )}
         
+      </Card>
+      
     </div>
   );
 }
