@@ -2608,6 +2608,7 @@ function Home({ onNavigate }) {
     { id: "project", icon: "🔨", title: "Project / Task Reality", desc: "Materials + labor + time cost + buffer", badge: "Total" },
     { id: "recession", icon: "📉", title: "Recession Preparation", desc: "Emergency runway + crisis readiness", badge: "Readiness" },
     { id: "debt", icon: "💳", title: "Debt Payoff Reality", desc: "Avalanche vs snowball · interest saved · payoff date", badge: "Freedom" },
+    { id: "freedom", icon: "🏆", title: "Financial Freedom Number", desc: "What income you need · taxes · obligations · career paths", badge: "Vision" },
   ];
   const features = [
     { title: "Hidden cost library", desc: "Toggle line items people forget", badge: "Built-in", color: C.green },
