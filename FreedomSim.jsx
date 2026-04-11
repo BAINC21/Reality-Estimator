@@ -895,21 +895,6 @@ export function FreedomSim({ user, onSave, onShowPro }) {
         </div>
       </Card>
 
-      {/* ── Bar chart ── */}
-      <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={breakdownData} layout="vertical">
-            <XAxis type="number" hide />
-            <YAxis type="category" dataKey="name" tick={{ fill: C.muted, fontSize: 11 }} width={80} />
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 10, border: `1px solid ${C.border}`, fontSize: 12 }} />
-            <Bar dataKey="value" radius={[0, 6, 6, 0]}>
-              {breakdownData.map((entry, i) => (
-                <Cell key={entry.name} fill={barColors[i]} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-
       {/* ── Career Paths ── */}
       <Card>
         <div style={{ fontSize: 11, color: "#0284c7", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
