@@ -21,6 +21,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { zipToState } from "./zipToState";
 
 // ─── SHARED THEME BRIDGE ─────────────────────────────────────────────────────
 // Reads the same dark mode flag App.jsx uses so colors stay in sync
@@ -475,13 +476,17 @@ function LockedAIInsightBox({ onUpgrade }) {
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export function FreedomSim({ user, onSave, onShowPro }) {
+  const [, forceUpdate] = useState(0);
   const C = getC();
+  useEffect(() => { forceUpdate(n => n + 1); }, []);
 
   // ── inputs ──
   const [scenarioName,     setScenarioName]     = useState("");
   const [visionIncome,     setVisionIncome]      = useState(120000);
   const [currentIncome,    setCurrentIncome]     = useState(50000);
-  const [state,            setState]             = useState("California");
+ const [state, setState] = useState(
+  zipToState(user?.zip) || "California"
+);
   // annual obligations
   const [rent,             setRent]              = useState(18000);
   const [carPayment,       setCarPayment]        = useState(5400);
