@@ -1702,8 +1702,8 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
   const totalCDValue = safeArr(cds).reduce((a, cd) => { try { const v = (cd.principal || 0) * Math.pow(1 + ((cd.apy || 0) / 100) / 12, cd.termMonths || 12); return a + v; } catch { return a; } }, 0);
   const totalCDPrincipal = safeArr(cds).reduce((a, cd) => a + (cd.principal || 0), 0);
 
-  const icons = { moving: "🏠", car: "🚗", project: "🔨", recession: "📉", debt: "💳" };
-  const colors = { moving: C.primary, car: "#0284c7", project: "#d97706", recession: "#dc2626" };
+  const icons = { moving: "🏠", car: "🚗", project: "🔨", recession: "📉", debt: "💳", freedom: "🏆" };
+  const colors = { moving: C.primary, car: "#0284c7", project: "#d97706", recession: "#dc2626", freedom: "#0f766e" };
 
   const dashTabs = [
     { id: "overview", label: "Overview" },
@@ -2682,12 +2682,14 @@ function Home({ onNavigate }) {
 
 // ─── SIMULATE PAGE ────────────────────────────────────────────────────────────
 function SimulatePage({ defaultTab, user, onSave, onShowPro }) {
-  const tabs = [
+ const tabs = [
+
     { id: "moving", icon: "🏠", label: "Moving Out" },
     { id: "car", icon: "🚗", label: "Car" },
     { id: "project", icon: "🔨", label: "Project" },
     { id: "recession", icon: "📉", label: "Recession" },
     { id: "debt", icon: "💳", label: "Debt" },
+    { id: "freedom", icon: "🏆", label: "Freedom" },
   ];
   const [active, setActive] = useState(defaultTab || "moving");
 
@@ -2713,6 +2715,7 @@ function SimulatePage({ defaultTab, user, onSave, onShowPro }) {
       {active === "project" && <ProjectSim user={user} onSave={onSave} onShowPro={onShowPro} />}
       {active === "recession" && <RecessionSim user={user} onSave={onSave} onShowPro={onShowPro} />}
       {active === "debt" && <DebtPayoffSim user={user} onSave={onSave} onShowPro={onShowPro} />}
+      {active === "freedom" && <FreedomSim user={user} onSave={onSave} onShowPro={onShowPro} />}
     </div>
   );
 }
@@ -3621,6 +3624,372 @@ function DebtPayoffSim({ user, onSave, onShowPro }) {
           </div>
         ))}
       </Card>
+    </div>
+  );
+  
+}// ─── FINANCIAL FREEDOM CALCULATOR ────────────────────────────────────────────
+const STATE_TAX_RATES = {
+  "Alabama": 5.0, "Alaska": 0, "Arizona": 2.5, "Arkansas": 4.4,
+  "California": 9.3, "Colorado": 4.4, "Connecticut": 5.0, "Delaware": 5.55,
+  "Florida": 0, "Georgia": 5.49, "Hawaii": 8.25, "Idaho": 5.8,
+  "Illinois": 4.95, "Indiana": 3.05, "Iowa": 3.8, "Kansas": 5.7,
+  "Kentucky": 4.5, "Louisiana": 3.0, "Maine": 7.15, "Maryland": 5.0,
+  "Massachusetts": 5.0, "Michigan": 4.25, "Minnesota": 7.85, "Mississippi": 4.7,
+  "Missouri": 4.8, "Montana": 6.75, "Nebraska": 5.84, "Nevada": 0,
+  "New Hampshire": 0, "New Jersey": 6.37, "New Mexico": 4.9, "New York": 6.85,
+  "North Carolina": 4.75, "North Dakota": 2.5, "Ohio": 3.75, "Oklahoma": 4.75,
+  "Oregon": 8.75, "Pennsylvania": 3.07, "Rhode Island": 5.99, "South Carolina": 6.4,
+  "South Dakota": 0, "Tennessee": 0, "Texas": 0, "Utah": 4.65,
+  "Vermont": 6.6, "Virginia": 5.75, "Washington": 0, "West Virginia": 5.12,
+  "Wisconsin": 7.65, "Wyoming": 0,
+};
+
+// Federal tax brackets 2025 (single filer)
+function calcFederalTax(gross) {
+  const brackets = [
+    [11925, 0.10],
+    [48475, 0.12],
+    [103350, 0.22],
+    [197300, 0.24],
+    [250525, 0.32],
+    [626350, 0.35],
+    [Infinity, 0.37],
+  ];
+  let tax = 0, prev = 0;
+  for (const [top, rate] of brackets) {
+    if (gross <= prev) break;
+    tax += (Math.min(gross, top) - prev) * rate;
+    prev = top;
+  }
+  return tax;
+}
+
+const CAREER_PATHS = {
+  "30000-59999": [
+    { title: "Skilled Trades", roles: "Electrician, Plumber, HVAC Tech", timeline: "2–4 yr apprenticeship", ceiling: "$80k–$120k+", path: "Apprenticeship → Journeyman → Master license → own business" },
+    { title: "Healthcare Support", roles: "Medical Assistant, Phlebotomist, Pharmacy Tech", timeline: "6–18 months cert", ceiling: "$45k–$65k", path: "Cert program → clinical role → specialize or become RN" },
+    { title: "CDL / Logistics", roles: "Truck Driver, Logistics Coordinator", timeline: "4–8 weeks CDL", ceiling: "$55k–$90k", path: "CDL → OTR → owner-operator or dispatcher" },
+  ],
+  "60000-99999": [
+    { title: "Software Development", roles: "Junior Dev, QA Engineer, Dev Ops", timeline: "6–18 months bootcamp/self-taught", ceiling: "$90k–$160k+", path: "Portfolio → junior role → senior → staff engineer" },
+    { title: "Registered Nurse", roles: "RN, Charge Nurse, Travel Nurse", timeline: "2–4 yr degree + NCLEX", ceiling: "$75k–$120k", path: "ADN → BSN → specialization (ICU, CRNA)" },
+    { title: "Sales (Tech/SaaS)", roles: "SDR, Account Executive, Sales Manager", timeline: "3–12 months entry", ceiling: "$80k–$180k+ OTE", path: "SDR → AE → Senior AE → team lead → director" },
+    { title: "Project Management", roles: "PM, Scrum Master, Product Owner", timeline: "PMP cert + 3 yr experience", ceiling: "$85k–$130k", path: "Coordinator → PM → Senior PM → Program Director" },
+  ],
+  "100000-149999": [
+    { title: "Software Engineering (Senior)", roles: "Senior Dev, Full-Stack, Backend Engineer", timeline: "3–5 yr experience", ceiling: "$130k–$200k+", path: "Mid-level → senior → staff → principal or management" },
+    { title: "Data / ML Engineer", roles: "Data Analyst → Engineer → ML Engineer", timeline: "2–4 yr with degree or bootcamp", ceiling: "$110k–$180k", path: "Analyst → BI developer → data engineer → ML engineer" },
+    { title: "Nurse Anesthetist (CRNA)", roles: "CRNA", timeline: "7–10 yr total (RN + grad school)", ceiling: "$160k–$230k", path: "RN (2yr) → ICU experience → CRNA program (3yr)" },
+    { title: "Cybersecurity", roles: "Security Analyst, Penetration Tester, CISO track", timeline: "1–3 yr + certifications", ceiling: "$95k–$160k", path: "CompTIA Sec+ → SOC Analyst → CISSP → senior roles" },
+  ],
+  "150000+": [
+    { title: "Software Engineering (Staff+)", roles: "Staff/Principal Engineer, Engineering Manager", timeline: "7–12 yr experience", ceiling: "$180k–$400k+ (with equity)", path: "Senior → Staff → Principal → VP Engineering" },
+    { title: "Medicine / Dentistry", roles: "Physician, Surgeon, Dentist", timeline: "10–15 yr (undergrad + med/dental school + residency)", ceiling: "$200k–$500k+", path: "MD/DO/DDS + residency + fellowship optional" },
+    { title: "Finance (Investment Banking / PE)", roles: "Analyst → Associate → VP → MD", timeline: "MBA or top undergrad finance program", ceiling: "$150k–$500k+ with bonus", path: "Analyst (2yr) → Associate (MBA) → VP → Director → MD" },
+    { title: "Entrepreneurship / Consulting", roles: "Founder, Fractional Exec, Independent Consultant", timeline: "Variable — 3–10+ yr to scale", ceiling: "Unlimited", path: "Build expertise → freelance → productize → scale or exit" },
+  ],
+};
+
+function getCareerBucket(annualTarget) {
+  if (annualTarget < 60000) return "30000-59999";
+  if (annualTarget < 100000) return "60000-99999";
+  if (annualTarget < 150000) return "100000-149999";
+  return "150000+";
+}
+
+function FreedomSim({ user, onSave, onShowPro }) {
+  const [scenarioName, setScenarioName] = useState("");
+  const [visionIncome, setVisionIncome] = useState(120000);
+  const [state, setState] = useState("California");
+  const [currentIncome, setCurrentIncome] = useState(50000);
+  const [rent, setRent] = useState(18000);
+  const [carPayment, setCarPayment] = useState(5000);
+  const [insurance, setInsurance] = useState(2400);
+  const [utilities, setUtilities] = useState(1800);
+  const [subscriptions, setSubscriptions] = useState(1200);
+  const [otherObligations, setOtherObligations] = useState(3000);
+  const [savingsRate, setSavingsRate] = useState(20);
+  const [discretionary, setDiscretionary] = useState(8000);
+  const [showObligations, setShowObligations] = useState(true);
+  const [showCareers, setShowCareers] = useState(false);
+  const [aiCareers, setAiCareers] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Tax math
+  const federalTax = calcFederalTax(visionIncome);
+  const stateTaxRate = STATE_TAX_RATES[state] || 0;
+  const ficaTax = Math.min(visionIncome * 0.0765, 10453); // employee FICA 2025 cap
+  const stateTax = visionIncome * (stateTaxRate / 100);
+  const totalTax = federalTax + stateTax + ficaTax;
+  const effectiveTaxRate = Math.round((totalTax / visionIncome) * 100);
+  const takeHome = visionIncome - totalTax;
+  const monthlyTakeHome = takeHome / 12;
+
+  // Annual obligations
+  const annualObligations = rent + carPayment + insurance + utilities + subscriptions + otherObligations;
+  const savingsGoal = Math.round(takeHome * (savingsRate / 100));
+  const annualDiscretionary = discretionary;
+  const totalNeeded = annualObligations + savingsGoal + annualDiscretionary;
+  const gap = Math.max(0, totalNeeded - takeHome);
+
+  // If gap > 0, how much gross do we need?
+  // Binary search for gross income that yields enough take-home
+  const solveGross = (targetTakeHome, st) => {
+    let lo = targetTakeHome, hi = targetTakeHome * 2.5;
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      const fed = calcFederalTax(mid);
+      const fica = Math.min(mid * 0.0765, 10453);
+      const stax = mid * ((STATE_TAX_RATES[st] || 0) / 100);
+      const net = mid - fed - fica - stax;
+      if (net < targetTakeHome) lo = mid; else hi = mid;
+    }
+    return Math.round((lo + hi) / 2);
+  };
+
+  const requiredGross = gap > 0 ? solveGross(totalNeeded, state) : visionIncome;
+  const gapFromCurrent = Math.max(0, requiredGross - currentIncome);
+  const gapPct = currentIncome > 0 ? Math.round((gapFromCurrent / currentIncome) * 100) : 100;
+
+  const score = Math.max(0, Math.min(100,
+    (gapFromCurrent === 0 ? 50 : gapPct <= 25 ? 35 : gapPct <= 50 ? 22 : gapPct <= 100 ? 10 : 3) +
+    (savingsRate >= 20 ? 30 : savingsRate >= 10 ? 18 : 8) +
+    (effectiveTaxRate <= 25 ? 20 : effectiveTaxRate <= 35 ? 12 : 6)
+  ));
+
+  const careers = CAREER_PATHS[getCareerBucket(requiredGross)];
+
+  const { text: aiText, loading: aiInsightLoading } = useAI(
+    `Financial freedom goal: $${visionIncome.toLocaleString()}/yr gross in ${state}. Effective tax rate: ${effectiveTaxRate}%. Take-home: $${Math.round(takeHome).toLocaleString()}. Annual obligations: $${annualObligations.toLocaleString()}. Savings goal (${savingsRate}%): $${savingsGoal.toLocaleString()}. Discretionary: $${annualDiscretionary.toLocaleString()}. Required gross to fund this lifestyle: $${requiredGross.toLocaleString()}. Current income: $${currentIncome.toLocaleString()}. Income gap: $${gapFromCurrent.toLocaleString()} (${gapPct}% increase needed). Score: ${score}/100. Give ONE sharp, honest insight about their path to this freedom number. Be direct and specific.`,
+    [visionIncome, state, currentIncome, rent, carPayment, insurance, utilities, subscriptions, otherObligations, savingsRate, discretionary]
+  );
+
+  const runCareerAI = async () => {
+    setAiLoading(true); setAiCareers("");
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 600,
+          system: "You are a career coach helping someone reach a specific income target. Give 3 realistic career paths tailored to reaching their goal. For each: the role, realistic timeline from zero, key first steps, and honest ceiling. Be direct and specific. Format as 3 numbered recommendations with a line break between each. No bullet points within each. Plain language.",
+          messages: [{
+            role: "user",
+            content: `I need to reach $${requiredGross.toLocaleString()}/yr gross to fund my financial freedom lifestyle in ${state}. My current income is $${currentIncome.toLocaleString()}. What are 3 realistic career paths or income moves I should consider? Be specific about timelines, certifications needed, and realistic salary ceilings.`
+          }]
+        })
+      });
+      const d = await res.json();
+      setAiCareers(d.content?.[0]?.text || "");
+      setShowCareers(true);
+    } catch { setAiCareers("Could not connect. Please try again."); }
+    setAiLoading(false);
+  };
+
+  const handleSave = () => {
+    if (!user) return alert("Create an account to save scenarios!");
+    const label = scenarioName.trim() ? scenarioName.trim() : `Freedom Number — ${fmt(requiredGross)}/yr`;
+    onSave({
+      id: Date.now().toString(), type: "freedom", label,
+      date: new Date().toLocaleDateString(),
+      data: { visionIncome, requiredGross, currentIncome, gapFromCurrent, gapPct, effectiveTaxRate, takeHome, totalNeeded, savingsRate, score }
+    });
+    setScenarioName("");
+  };
+
+  const breakdownData = [
+    { name: "Obligations", value: annualObligations, color: "#dc2626" },
+    { name: "Savings", value: savingsGoal, color: "#0f766e" },
+    { name: "Discretionary", value: annualDiscretionary, color: "#0284c7" },
+    { name: "Taxes", value: Math.round(totalTax), color: "#7c3aed" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+      {/* Hero card */}
+      <Card style={{ background: C.bg === "#0a0f1e" ? "linear-gradient(135deg, #0f172a, #1a2f1a)" : "linear-gradient(135deg, #f0fdf4, #ecfdf5)", border: `1.5px solid ${C.greenBorder}` }}>
+        <div style={{ fontSize: 11, color: C.green, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>🏆 Financial Freedom Calculator</div>
+        <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 14 }}>
+          Define what financial freedom looks like for you. We'll calculate the gross income you actually need — after taxes, obligations, savings, and lifestyle — then show you career paths to get there.
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{ background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: C.green, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>Freedom Income Vision</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.green }}>{fmt(visionIncome)}<span style={{ fontSize: 11, fontWeight: 400 }}>/yr</span></div>
+          </div>
+          <div style={{ background: gap > 0 ? C.redBg : C.greenBg, border: `1px solid ${gap > 0 ? C.redBorder : C.greenBorder}`, borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: gap > 0 ? C.red : C.green, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>Gross Needed</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: gap > 0 ? C.red : C.green }}>{fmt(requiredGross)}<span style={{ fontSize: 11, fontWeight: 400 }}>/yr</span></div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Vision input */}
+      <Card>
+        <div style={{ fontSize: 11, color: C.green, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14 }}>Step 1 — Define Your Vision</div>
+        <NumInput label="Freedom Vision Income (annual gross target)" value={visionIncome} onChange={setVisionIncome} accentColor={C.green} />
+        <NumInput label="Your Current Annual Gross Income" value={currentIncome} onChange={setCurrentIncome} accentColor={C.primary} />
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>State (for tax calculation)</div>
+          <select value={state} onChange={e => setState(e.target.value)}
+            style={{ width: "100%", padding: "11px 14px", border: `1.5px solid ${C.border}`, borderRadius: 12, fontSize: 14, fontFamily: "inherit", outline: "none" }}>
+            {US_STATES.map(s => <option key={s} value={s}>{s} {STATE_TAX_RATES[s] === 0 ? "· No state income tax" : `· ${STATE_TAX_RATES[s]}% state tax`}</option>)}
+          </select>
+        </div>
+
+        {/* Tax breakdown highlight */}
+        <div style={{ background: "rgba(124,58,237,0.07)", border: "1.5px solid rgba(124,58,237,0.2)", borderRadius: 12, padding: "12px 16px" }}>
+          <div style={{ fontSize: 11, color: "#7c3aed", fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>Tax Impact on ${visionIncome.toLocaleString()}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, textAlign: "center" }}>
+            {[
+              { label: "Federal", value: fmt(Math.round(federalTax)) },
+              { label: "State", value: fmt(Math.round(stateTax)) },
+              { label: "FICA", value: fmt(Math.round(ficaTax)) },
+              { label: "Take-Home", value: fmt(Math.round(takeHome)) },
+            ].map(item => (
+              <div key={item.label}>
+                <div style={{ fontSize: 10, color: "#7c3aed", fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>{item.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: item.label === "Take-Home" ? C.green : "#7c3aed" }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, textAlign: "center" }}>
+            Effective rate: <strong style={{ color: "#7c3aed" }}>{effectiveTaxRate}%</strong> · Monthly take-home: <strong style={{ color: C.green }}>{fmt(Math.round(monthlyTakeHome))}</strong>
+          </div>
+        </div>
+      </Card>
+
+      {/* Obligations */}
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.red, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>Step 2 — Annual Obligations</div>
+          <button onClick={() => setShowObligations(v => !v)} style={{ background: "none", border: "none", color: C.primary, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+            {showObligations ? "▲ Hide" : "▼ Show"}
+          </button>
+        </div>
+        {showObligations && (
+          <>
+            <NumInput label="Rent / Mortgage (annual)" value={rent} onChange={setRent} accentColor="#dc2626" />
+            <NumInput label="Car Payment (annual)" value={carPayment} onChange={setCarPayment} accentColor="#dc2626" />
+            <NumInput label="Insurance — all types (annual)" value={insurance} onChange={setInsurance} accentColor="#dc2626" />
+            <NumInput label="Utilities (annual)" value={utilities} onChange={setUtilities} accentColor="#dc2626" />
+            <NumInput label="Subscriptions (annual)" value={subscriptions} onChange={setSubscriptions} accentColor="#dc2626" />
+            <NumInput label="Other Fixed Obligations (annual)" value={otherObligations} onChange={setOtherObligations} accentColor="#dc2626" />
+          </>
+        )}
+        <div style={{ background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>Total Annual Obligations</span>
+          <span style={{ fontSize: 14, fontWeight: 900, color: C.red }}>{fmt(annualObligations)}</span>
+        </div>
+      </Card>
+
+      {/* Savings + Discretionary */}
+      <Card>
+        <div style={{ fontSize: 11, color: C.primary, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 14 }}>Step 3 — Savings & Lifestyle</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>
+            Savings Rate: <span style={{ color: C.green, fontWeight: 700 }}>{savingsRate}% = {fmt(savingsGoal)}/yr</span>
+          </div>
+          <input type="range" min="5" max="50" step="1" value={savingsRate} onChange={e => setSavingsRate(+e.target.value)}
+            style={{ width: "100%", accentColor: C.green }} />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginTop: 3 }}>
+            <span>5% (bare minimum)</span><span>20% (recommended)</span><span>50% (FIRE)</span>
+          </div>
+        </div>
+        <NumInput label="Annual Discretionary / Lifestyle Spend" value={discretionary} onChange={setDiscretionary} accentColor="#0284c7" />
+        <div style={{ fontSize: 11, color: C.muted, marginTop: -8, marginBottom: 14 }}>Travel, dining, entertainment, personal spending</div>
+      </Card>
+
+      {/* Results */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <ScoreRing score={score} />
+          <div style={{ flex: 1, paddingLeft: 16 }}>
+            <StatRow label="Annual Take-Home" value={fmt(Math.round(takeHome))} color={C.green} />
+            <StatRow label="Total Needed (after-tax)" value={fmt(totalNeeded)} color={C.text} />
+            <StatRow label="Gross Income Required" value={fmt(requiredGross)} color={gap > 0 ? C.red : C.green} />
+            <StatRow label="Income Gap from Current" value={gapFromCurrent > 0 ? fmt(gapFromCurrent) + "/yr" : "✓ Already there"} color={gapFromCurrent > 0 ? C.red : C.green} />
+            <StatRow label="Increase Needed" value={gapFromCurrent > 0 ? `${gapPct}% more` : "—"} color={gapFromCurrent > 0 ? "#d97706" : C.green} />
+          </div>
+        </div>
+
+        {/* Breakdown bar chart */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 8 }}>How Your Freedom Income Gets Spent</div>
+          {breakdownData.map(item => {
+            const pct = Math.round((item.value / (visionIncome || 1)) * 100);
+            return (
+              <div key={item.name} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>{item.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: item.color }}>{fmt(item.value)} · {pct}%</span>
+                </div>
+                <div style={{ height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: item.color, borderRadius: 3, transition: "width 0.4s ease" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {user?.is_pro !== false ? <AIInsight text={aiText} loading={aiInsightLoading} /> : <LockedAIInsight onUpgrade={onShowPro} />}
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 11, color: C.muted, fontWeight: 600, marginBottom: 4 }}>Scenario Name (optional)</div>
+          <input value={scenarioName} onChange={e => setScenarioName(e.target.value)} placeholder="e.g. Freedom by 35, FIRE Goal"
+            style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.cardAlt, color: C.text, fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", outline: "none", marginBottom: 8 }} />
+        </div>
+        <Btn onClick={handleSave} style={{ width: "100%" }}>💾 Save Scenario</Btn>
+      </Card>
+
+      {/* Career Paths */}
+      <Card>
+        <div style={{ fontSize: 11, color: "#0284c7", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>🎯 Career Paths to {fmt(requiredGross)}/yr</div>
+        <div style={{ fontSize: 12, color: C.muted, marginBottom: 14, lineHeight: 1.6 }}>
+          These are realistic paths based on your target income of {fmt(requiredGross)}/yr gross. Not financial or career advice — do your research and talk to people in these fields.
+        </div>
+
+        {/* Static curated paths */}
+        {careers.map((c, i) => (
+          <div key={i} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: 14, padding: "14px 16px", marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{c.title}</div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.greenBg, border: `1px solid ${C.greenBorder}`, padding: "2px 9px", borderRadius: 999, flexShrink: 0, marginLeft: 8 }}>{c.ceiling}</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+              <strong style={{ color: C.text }}>Roles:</strong> {c.roles}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+              <strong style={{ color: "#0284c7" }}>Timeline:</strong> {c.timeline}
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, background: "rgba(37,99,235,0.05)", borderRadius: 8, padding: "8px 10px", borderLeft: `3px solid ${C.primary}` }}>
+              {c.path}
+            </div>
+          </div>
+        ))}
+
+        {/* AI career deep-dive */}
+        <button onClick={runCareerAI} disabled={aiLoading}
+          style={{ width: "100%", padding: "13px", borderRadius: 12, background: aiLoading ? C.cardAlt : "linear-gradient(135deg, #0284c7, #0369a1)", border: "none", color: aiLoading ? C.muted : "#fff", fontWeight: 800, fontSize: 14, cursor: aiLoading ? "not-allowed" : "pointer", fontFamily: "inherit", marginTop: 4 }}>
+          {aiLoading ? "✦ Generating AI career recommendations…" : showCareers && aiCareers ? "✦ Refresh AI Recommendations" : "✦ Get AI Career Recommendations"}
+        </button>
+
+        {aiCareers && showCareers && (
+          <div style={{ background: C.bg === "#0a0f1e" ? "linear-gradient(135deg, #0f172a, #0c2340)" : "linear-gradient(135deg, #eff6ff, #e0f2fe)", border: `1.5px solid ${C.primary}40`, borderRadius: 14, padding: 16, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #0284c7, #0369a1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0, color: "#fff", fontWeight: 700 }}>✦</div>
+              <div style={{ fontSize: 13, color: C.bg === "#0a0f1e" ? "#bae6fd" : "#0c4a6e", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                {aiCareers}
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: C.muted, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+              ⚠️ AI-generated suggestions for exploration only. Not career advice. Research thoroughly and speak with professionals in each field before making decisions.
+            </div>
+          </div>
+        )}
+      </Card>
+
     </div>
   );
 }
