@@ -3629,9 +3629,7 @@ function DebtPayoffSim({ user, onSave, onShowPro }) {
     </div>
   );
   
-}// ─── FINANCIAL FREEDOM CALCULATOR ────────────────────────────────────────────
 }
-
 
 // ─── NEWS PAGE ────────────────────────────────────────────────────────────────
 function NewsPage({ user }) {
