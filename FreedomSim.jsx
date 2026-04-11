@@ -21,6 +21,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 // ─── SHARED THEME BRIDGE ─────────────────────────────────────────────────────
 // Reads the same dark mode flag App.jsx uses so colors stay in sync
@@ -896,25 +897,19 @@ export function FreedomSim({ user, onSave, onShowPro }) {
       </Card>
 
       {/* ── Bar chart ── */}
-      <Card>
-        <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
-          Annual Budget Breakdown
-        </div>
-        <ResponsiveContainer width="100%" height={160}>
+      <ResponsiveContainer width="100%" height={160}>
           <BarChart data={breakdownData} layout="vertical">
             <XAxis type="number" hide />
             <YAxis type="category" dataKey="name" tick={{ fill: C.muted, fontSize: 11 }} width={80} />
             <CartesianGrid strokeDasharray="3 3" stroke={C.border} />
-            <Tooltip
-              formatter={(v) => fmt(v)}
-              contentStyle={{ borderRadius: 10, border: `1px solid ${C.border}`, fontSize: 12 }}
-            />
-            {breakdownData.map((entry, i) => (
-              <Bar key={entry.name} dataKey="value" fill={barColors[i]} radius={[0, 6, 6, 0]} />
-            ))}
+            <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 10, border: `1px solid ${C.border}`, fontSize: 12 }} />
+            <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+              {breakdownData.map((entry, i) => (
+                <Cell key={entry.name} fill={barColors[i]} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </Card>
 
       {/* ── Career Paths ── */}
       <Card>
