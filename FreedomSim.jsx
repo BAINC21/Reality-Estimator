@@ -1065,10 +1065,7 @@ export function FreedomSim({ user, onSave, onShowPro }) {
     </div>
   </div>
 )}
-          </div>
-        </div>
-      </Card>
-
+        
     </div>
   );
 }
