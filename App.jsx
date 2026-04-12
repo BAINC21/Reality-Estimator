@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { createClient } from "@supabase/supabase-js";
+import { FreedomSim } from "./FreedomSim";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://obsgsmaxydccohmyjxhh.supabase.co";
@@ -1702,8 +1703,8 @@ function Dashboard({ user, onLogout, onShowAuth, showEmail, onToggleEmail, onSho
   const totalCDValue = safeArr(cds).reduce((a, cd) => { try { const v = (cd.principal || 0) * Math.pow(1 + ((cd.apy || 0) / 100) / 12, cd.termMonths || 12); return a + v; } catch { return a; } }, 0);
   const totalCDPrincipal = safeArr(cds).reduce((a, cd) => a + (cd.principal || 0), 0);
 
-  const icons = { moving: "🏠", car: "🚗", project: "🔨", recession: "📉", debt: "💳" };
-  const colors = { moving: C.primary, car: "#0284c7", project: "#d97706", recession: "#dc2626" };
+  const icons = { moving: "🏠", car: "🚗", project: "🔨", recession: "📉", debt: "💳", freedom: "🏆" };
+  const colors = { moving: C.primary, car: "#0284c7", project: "#d97706", recession: "#dc2626", freedom: "#0f766e" };
 
   const dashTabs = [
     { id: "overview", label: "Overview" },
@@ -2607,6 +2608,7 @@ function Home({ onNavigate }) {
     { id: "project", icon: "🔨", title: "Project / Task Reality", desc: "Materials + labor + time cost + buffer", badge: "Total" },
     { id: "recession", icon: "📉", title: "Recession Preparation", desc: "Emergency runway + crisis readiness", badge: "Readiness" },
     { id: "debt", icon: "💳", title: "Debt Payoff Reality", desc: "Avalanche vs snowball · interest saved · payoff date", badge: "Freedom" },
+    { id: "freedom", icon: "🏆", title: "Financial Freedom Number", desc: "What income you need · taxes · obligations · career paths", badge: "Vision" },
   ];
   const features = [
     { title: "Hidden cost library", desc: "Toggle line items people forget", badge: "Built-in", color: C.green },
@@ -2688,6 +2690,7 @@ function SimulatePage({ defaultTab, user, onSave, onShowPro }) {
     { id: "project", icon: "🔨", label: "Project" },
     { id: "recession", icon: "📉", label: "Recession" },
     { id: "debt", icon: "💳", label: "Debt" },
+    { id: "freedom", icon: "🏆", label: "Freedom" },
   ];
   const [active, setActive] = useState(defaultTab || "moving");
 
@@ -2713,6 +2716,7 @@ function SimulatePage({ defaultTab, user, onSave, onShowPro }) {
       {active === "project" && <ProjectSim user={user} onSave={onSave} onShowPro={onShowPro} />}
       {active === "recession" && <RecessionSim user={user} onSave={onSave} onShowPro={onShowPro} />}
       {active === "debt" && <DebtPayoffSim user={user} onSave={onSave} onShowPro={onShowPro} />}
+      {active === "freedom" && <FreedomSim user={user} onSave={onSave} onShowPro={onShowPro} />}
     </div>
   );
 }
@@ -3623,8 +3627,8 @@ function DebtPayoffSim({ user, onSave, onShowPro }) {
       </Card>
     </div>
   );
+  
 }
-
 
 // ─── NEWS PAGE ────────────────────────────────────────────────────────────────
 function NewsPage({ user }) {
