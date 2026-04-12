@@ -2684,8 +2684,7 @@ function Home({ onNavigate }) {
 
 // ─── SIMULATE PAGE ────────────────────────────────────────────────────────────
 function SimulatePage({ defaultTab, user, onSave, onShowPro }) {
- const tabs = [
-
+  const tabs = [
     { id: "moving", icon: "🏠", label: "Moving Out" },
     { id: "car", icon: "🚗", label: "Car" },
     { id: "project", icon: "🔨", label: "Project" },
